@@ -1,1 +1,21 @@
+# Go
+bin/
+*.exe
+*.test
+*.out
+
+# env
+.env
+
+# macOS
 .DS_Store
+
+# IDE
+.vscode/
+.idea/
+
+# logs
+*.log
+
+# docker
+postgres_data/
