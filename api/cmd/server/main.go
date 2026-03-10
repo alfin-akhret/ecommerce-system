@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
@@ -24,5 +25,8 @@ func main() {
 	r.Post("/users", application.UserHandler.CreateUser)
 
 	fmt.Println("Server is running on :" + application.Config.Port)
-	http.ListenAndServe(":"+application.Config.Port, r)
+
+	if err := http.ListenAndServe(":"+application.Config.Port, r); err != nil {
+		log.Fatal(err)
+	}
 }
