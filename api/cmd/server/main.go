@@ -19,7 +19,9 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK cool"))
+		if _, err := w.Write([]byte("OK cool")); err != nil {
+			log.Printf("health write failed: %v", err)
+		}
 	})
 
 	r.Post("/users", application.UserHandler.CreateUser)
