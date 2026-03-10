@@ -32,3 +32,25 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 
 	return err
 }
+
+func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
+	query := `
+	select id, name, email, password_hash, created_at
+	from users
+	where id = $1::uuid
+	`
+
+	var user model.User
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.PasswordHash,
+		&user.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}

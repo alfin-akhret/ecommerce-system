@@ -35,3 +35,7 @@ func (s *UserService) CreateUser(ctx context.Context, name string, email string,
 
 	return user, nil
 }
+
+func (s *UserService) GetUserByID(ctx context.Context, id string) (*model.User, error) {
+	return s.repo.FindByID(ctx, id)
+}
