@@ -3,14 +3,15 @@ package app
 import (
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/database"
-	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/redis/go-redis/v9"
+	"github.com/alfin-akhret/ecommerce-system/internal/handler"
+	"github.com/alfin-akhret/ecommerce-system/internal/repository"
+	"github.com/alfin-akhret/ecommerce-system/internal/service"
 )
 
 type App struct {
 	Config *config.Config
-	DB     *pgxpool.Pool
-	Redis  *redis.Client
+
+	UserHandler *handler.UserHandler
 }
 
 func New() (*App, error) {
@@ -21,11 +22,14 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	rdb := database.NewRedis(cfg.RedisAddr)
+	// rdb := database.NewRedis(cfg.RedisAddr)
+
+	userRepo := repository.NewUserRepository(db)
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userService)
 
 	return &App{
-		Config: cfg,
-		DB:     db,
-		Redis:  rdb,
+		Config:      cfg,
+		UserHandler: userHandler,
 	}, nil
 }

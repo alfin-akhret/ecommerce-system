@@ -21,6 +21,8 @@ func main() {
 		w.Write([]byte("OK cool"))
 	})
 
+	r.Post("/users", application.UserHandler.CreateUser)
+
 	fmt.Println("Server is running on :" + application.Config.Port)
 	http.ListenAndServe(":"+application.Config.Port, r)
 }
