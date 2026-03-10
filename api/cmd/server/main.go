@@ -4,24 +4,16 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/alfin-akhret/ecommerce-system/internal/config"
-	"github.com/alfin-akhret/ecommerce-system/internal/database"
+	"github.com/alfin-akhret/ecommerce-system/internal/app"
 
 	"github.com/go-chi/chi"
 )
 
 func main() {
-	cfg := config.Load()
-
-	db, err := database.NewPostgres(cfg.DBUrl)
+	application, err := app.New()
 	if err != nil {
 		panic(err)
 	}
-
-	redis := database.NewRedis(cfg.RedisAddr)
-
-	fmt.Println("Postgres connected:", db != nil)
-	fmt.Println("Redis connected:", redis != nil)
 
 	r := chi.NewRouter()
 
@@ -29,6 +21,6 @@ func main() {
 		w.Write([]byte("OK cool"))
 	})
 
-	fmt.Println("Server is running on :8080")
-	http.ListenAndServe(":"+cfg.Port, r)
+	fmt.Println("Server is running on :" + application.Config.Port)
+	http.ListenAndServe(":"+application.Config.Port, r)
 }
