@@ -5,6 +5,7 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/internal/model"
 	"github.com/alfin-akhret/ecommerce-system/internal/repository"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
@@ -15,13 +16,19 @@ func NewUserService(repo *repository.UserRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
-func (s *UserService) CreateUser(ctx context.Context, name string, email string) (*model.User, error) {
-	user := &model.User{
-		Name:  name,
-		Email: email,
+func (s *UserService) CreateUser(ctx context.Context, name string, email string, password string) (*model.User, error) {
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	if err != nil {
+		return nil, err
 	}
 
-	err := s.repo.Create(ctx, user)
+	user := &model.User{
+		Name:         name,
+		Email:        email,
+		PasswordHash: string(hash),
+	}
+
+	err = s.repo.Create(ctx, user)
 	if err != nil {
 		return nil, err
 	}
