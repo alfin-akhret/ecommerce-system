@@ -51,3 +51,8 @@ Content-Type: application/json
     "email": "newUser4@gmail.com",
     "password": "wrong-password"
 }
+
+###
+// test me (replace <TOKEN> with login token)
+GET http://localhost:8080/me
+Authorization: Bearer <TOKEN>

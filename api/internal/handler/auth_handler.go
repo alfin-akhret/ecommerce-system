@@ -49,3 +49,13 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 	writeSuccess(w, http.StatusOK, resp)
 }
+
+func (h *AuthHandler) Me(w http.ResponseWriter, r *http.Request) {
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok || userID == "" {
+		writeError(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	writeSuccess(w, http.StatusOK, map[string]string{"user_id": userID})
+}

@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
+	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 
 	"github.com/go-chi/chi"
 )
@@ -28,6 +29,7 @@ func main() {
 	r.Get("/users/{id}", application.UserHandler.GetUser)
 	r.Post("/register", application.UserHandler.Register)
 	r.Post("/login", application.AuthHandler.Login)
+	r.With(auth.AuthMiddleware).Get("/me", application.AuthHandler.Me)
 
 	fmt.Println("Server is running on :" + application.Config.Port)
 
