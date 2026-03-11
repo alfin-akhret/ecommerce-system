@@ -27,6 +27,7 @@ func main() {
 	r.Post("/users", application.UserHandler.CreateUser)
 	r.Get("/users/{id}", application.UserHandler.GetUser)
 	r.Post("/register", application.UserHandler.Register)
+	r.Post("/login", application.AuthHandler.Login)
 
 	fmt.Println("Server is running on :" + application.Config.Port)
 

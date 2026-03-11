@@ -12,6 +12,7 @@ type App struct {
 	Config *config.Config
 
 	UserHandler *handler.UserHandler
+	AuthHandler *handler.AuthHandler
 }
 
 func New() (*App, error) {
@@ -27,9 +28,11 @@ func New() (*App, error) {
 	userRepo := repository.NewUserRepository(db)
 	userService := service.NewUserService(userRepo)
 	userHandler := handler.NewUserHandler(userService)
+	authHandler := handler.NewAuthHandler(userService)
 
 	return &App{
 		Config:      cfg,
 		UserHandler: userHandler,
+		AuthHandler: authHandler,
 	}, nil
 }
