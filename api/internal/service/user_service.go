@@ -21,6 +21,18 @@ func NewUserService(repo *repository.UserRepository) *UserService {
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
 func (s *UserService) CreateUser(ctx context.Context, name string, email string, password string) (*model.User, error) {
+	return s.createUser(ctx, name, email, password)
+}
+
+func (s *UserService) GetUserByID(ctx context.Context, id string) (*model.User, error) {
+	return s.repo.FindByID(ctx, id)
+}
+
+func (s *UserService) Register(ctx context.Context, req model.RegisterRequest) (*model.User, error) {
+	return s.createUser(ctx, req.Name, req.Email, req.Password)
+}
+
+func (s *UserService) createUser(ctx context.Context, name string, email string, password string) (*model.User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
@@ -32,32 +44,7 @@ func (s *UserService) CreateUser(ctx context.Context, name string, email string,
 		PasswordHash: string(hash),
 	}
 
-	err = s.repo.Create(ctx, user)
-	if err != nil {
-		return nil, err
-	}
-
-	return user, nil
-}
-
-func (s *UserService) GetUserByID(ctx context.Context, id string) (*model.User, error) {
-	return s.repo.FindByID(ctx, id)
-}
-
-func (s *UserService) Register(ctx context.Context, req model.RegisterRequest) (*model.User, error) {
-	hash, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, err
-	}
-
-	user := &model.User{
-		Name:         req.Name,
-		Email:        req.Email,
-		PasswordHash: string(hash),
-	}
-
-	err = s.repo.Create(ctx, user)
-	if err != nil {
+	if err := s.repo.Create(ctx, user); err != nil {
 		return nil, err
 	}
 
