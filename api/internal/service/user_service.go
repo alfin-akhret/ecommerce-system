@@ -65,7 +65,7 @@ func (s *UserService) Register(ctx context.Context, req model.RegisterRequest) (
 }
 
 func (s *UserService) Login(ctx context.Context, email string, password string) (*model.User, error) {
-	user, err := s.repo.FindByEmail(ctx, email)
+	user, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, ErrInvalidCredentials

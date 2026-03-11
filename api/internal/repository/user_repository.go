@@ -55,7 +55,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, 
 	return &user, nil
 }
 
-func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	query := `
 	select id, name, email, password_hash, created_at
 	from users

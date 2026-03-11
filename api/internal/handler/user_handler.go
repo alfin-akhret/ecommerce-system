@@ -46,7 +46,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	resp := toUserResponse(user)
 
-	writeJSON(w, http.StatusCreated, resp)
+	writeSuccess(w, http.StatusCreated, resp)
 }
 
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
@@ -60,7 +60,7 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	resp := toUserResponse(user)
 
-	writeJSON(w, http.StatusOK, resp)
+	writeSuccess(w, http.StatusOK, resp)
 }
 
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
@@ -80,5 +80,5 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	resp := toUserResponse(user)
 
-	writeJSON(w, http.StatusOK, resp)
+	writeSuccess(w, http.StatusOK, resp)
 }
