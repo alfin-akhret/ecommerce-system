@@ -17,11 +17,11 @@ create table products (
 );
 
 create table product_inventory (
-	product_id uuid primary key default gen_random_uuid(),
-	stock int not null,
-	reserved int default 0,
+	product_id uuid primary key,
+	stock int not null check (stock >= 0),
+	reserved int default 0 check (reserved >= 0),
 	updated_at timestamp default now(),
-	foreign key (product_id) references products(id)
+	foreign key (product_id) references products(id) on delete cascade
 );
 
 create table orders (
