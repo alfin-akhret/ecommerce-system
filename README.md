@@ -7,6 +7,10 @@ Backend e-commerce (work in progress) written in Go. The repo currently contains
 - API server (Go + `chi`) with:
   - `GET /health`
   - `POST /users` (create user; password is stored as `bcrypt` hash)
+  - `POST /register` (create user)
+  - `POST /login` (JWT login)
+  - `GET /me` (protected, requires `Authorization: Bearer <token>`)
+  - `GET /users/{id}`
 - Postgres schema migrations for:
   - `users`, `products`, `product_inventory`, `orders`, `order_items`, `payments`
 - Local infrastructure via Docker Compose: Postgres + Redis
@@ -19,13 +23,12 @@ The request path is:
 
 Key locations:
 
-- `api/cmd/server/main.go`: HTTP server bootstrap + routes
+- `api/cmd/api/main.go`: HTTP server bootstrap + routes
 - `api/internal/app/app.go`: dependency wiring (config, DB, handlers)
-- `api/internal/handler/`: HTTP layer (JSON decode/encode)
-- `api/internal/service/`: business logic (e.g. password hashing)
-- `api/internal/repository/`: database queries
-- `api/internal/database/`: DB clients (`pgxpool`, Redis client)
-- `api/internal/model/`: domain models
+- `api/internal/auth/`: auth domain (JWT, middleware, handler)
+- `api/internal/user/`: user domain (model, dto, repository, service, handler)
+- `api/pkg/database/`: DB clients (`pgxpool`, Redis client)
+- `api/pkg/helper/`: shared response helpers
 - `api/migrations/`: SQL schema migrations (currently manual/external-tool driven)
 - `infrastructure/docker/docker-compose.yml`: local Postgres + Redis
 
@@ -53,9 +56,46 @@ Key locations:
 - Response: `201 Created`
 
 This endpoint is implemented in:
-- `api/internal/handler/user_handler.go` (`CreateUser`)
-- `api/internal/service/user_service.go` (`CreateUser`)
-- `api/internal/repository/user_repository.go` (`Create`)
+- `api/internal/user/handler.go` (`CreateUser`)
+- `api/internal/user/service.go` (`CreateUser`)
+- `api/internal/user/repository.go` (`Create`)
+
+### Register
+
+- `POST /register`
+- Content-Type: `application/json`
+- Body:
+
+```json
+{
+  "name": "NewUser",
+  "email": "newuser@gmail.com",
+  "password": "ChangeMe123!"
+}
+```
+
+- Response: `200 OK`
+
+### Login
+
+- `POST /login`
+- Content-Type: `application/json`
+- Body:
+
+```json
+{
+  "email": "newuser@gmail.com",
+  "password": "ChangeMe123!"
+}
+```
+
+- Response: `200 OK` with `{ "token": "<jwt>" }`
+
+### Me
+
+- `GET /me`
+- Header: `Authorization: Bearer <token>`
+- Response: `200 OK` with `{ "user_id": "<id>" }`
 
 You can also use the scratch file `api/api_test.http` to try the endpoints from an IDE HTTP client.
 
@@ -98,12 +138,11 @@ docker exec -i ecommerce-postgres psql -U postgres -d ecommerce < api/migrations
 
 ```bash
 cd api
-go run ./cmd/server
+go run ./cmd/api
 ```
 
 Server prints the port and listens on `http://localhost:8080` by default.
 
 ## Notes / Next Work
 
-- The DB schema already includes products, inventory, orders, and payments, but the Go implementation currently only exposes user creation.
-- `github.com/gin-gonic/gin` is present in `api/go.mod`, but the running server uses `chi` right now.
+- The DB schema already includes products, inventory, orders, and payments, but the Go implementation currently only exposes basic user and auth endpoints.

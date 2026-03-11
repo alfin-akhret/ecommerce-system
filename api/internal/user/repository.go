@@ -1,9 +1,8 @@
-package repository
+package user
 
 import (
 	"context"
 
-	"github.com/alfin-akhret/ecommerce-system/internal/model"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -15,7 +14,7 @@ func NewUserRepository(db *pgxpool.Pool) *UserRepository {
 	return &UserRepository{db: db}
 }
 
-func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
+func (r *UserRepository) Create(ctx context.Context, user *User) error {
 	query := `
 	insert into users (name, email, password_hash)
 	values ($1, $2, $3)
@@ -33,14 +32,14 @@ func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	return err
 }
 
-func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, error) {
+func (r *UserRepository) FindByID(ctx context.Context, id string) (*User, error) {
 	query := `
 	select id, name, email, password_hash, created_at
 	from users
 	where id = $1::uuid
 	`
 
-	var user model.User
+	var user User
 	err := r.db.QueryRow(ctx, query, id).Scan(
 		&user.ID,
 		&user.Name,
@@ -55,7 +54,7 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, 
 	return &user, nil
 }
 
-func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*User, error) {
 	query := `
 	select id, name, email, password_hash, created_at
 	from users
@@ -63,7 +62,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 	limit 1
 	`
 
-	var user model.User
+	var user User
 	err := r.db.QueryRow(ctx, query, email).Scan(
 		&user.ID,
 		&user.Name,

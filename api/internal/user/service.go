@@ -1,44 +1,42 @@
-package service
+package user
 
 import (
 	"context"
 	"errors"
 
-	"github.com/alfin-akhret/ecommerce-system/internal/model"
-	"github.com/alfin-akhret/ecommerce-system/internal/repository"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type UserService struct {
-	repo *repository.UserRepository
+	repo *UserRepository
 }
 
-func NewUserService(repo *repository.UserRepository) *UserService {
+func NewUserService(repo *UserRepository) *UserService {
 	return &UserService{repo: repo}
 }
 
 var ErrInvalidCredentials = errors.New("invalid credentials")
 
-func (s *UserService) CreateUser(ctx context.Context, name string, email string, password string) (*model.User, error) {
+func (s *UserService) CreateUser(ctx context.Context, name string, email string, password string) (*User, error) {
 	return s.createUser(ctx, name, email, password)
 }
 
-func (s *UserService) GetUserByID(ctx context.Context, id string) (*model.User, error) {
+func (s *UserService) GetUserByID(ctx context.Context, id string) (*User, error) {
 	return s.repo.FindByID(ctx, id)
 }
 
-func (s *UserService) Register(ctx context.Context, req model.RegisterRequest) (*model.User, error) {
+func (s *UserService) Register(ctx context.Context, req RegisterRequest) (*User, error) {
 	return s.createUser(ctx, req.Name, req.Email, req.Password)
 }
 
-func (s *UserService) createUser(ctx context.Context, name string, email string, password string) (*model.User, error) {
+func (s *UserService) createUser(ctx context.Context, name string, email string, password string) (*User, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
 		return nil, err
 	}
 
-	user := &model.User{
+	user := &User{
 		Name:         name,
 		Email:        email,
 		PasswordHash: string(hash),
@@ -51,7 +49,7 @@ func (s *UserService) createUser(ctx context.Context, name string, email string,
 	return user, nil
 }
 
-func (s *UserService) Login(ctx context.Context, email string, password string) (*model.User, error) {
+func (s *UserService) Login(ctx context.Context, email string, password string) (*User, error) {
 	user, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {

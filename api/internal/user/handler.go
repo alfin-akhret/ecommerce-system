@@ -1,19 +1,18 @@
-package handler
+package user
 
 import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/alfin-akhret/ecommerce-system/internal/model"
-	"github.com/alfin-akhret/ecommerce-system/internal/service"
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/go-chi/chi"
 )
 
 type UserHandler struct {
-	service *service.UserService
+	service *UserService
 }
 
-func NewUserHandler(service *service.UserService) *UserHandler {
+func NewUserHandler(service *UserService) *UserHandler {
 	return &UserHandler{service: service}
 }
 
@@ -28,7 +27,7 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		helper.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
@@ -40,13 +39,13 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		helper.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	resp := toUserResponse(user)
 
-	writeSuccess(w, http.StatusCreated, resp)
+	helper.WriteSuccess(w, http.StatusCreated, resp)
 }
 
 func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
@@ -54,31 +53,40 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 
 	user, err := h.service.GetUserByID(r.Context(), id)
 	if err != nil {
-		writeError(w, http.StatusNotFound, "user not found")
+		helper.WriteError(w, http.StatusNotFound, "user not found")
 		return
 	}
 
 	resp := toUserResponse(user)
 
-	writeSuccess(w, http.StatusOK, resp)
+	helper.WriteSuccess(w, http.StatusOK, resp)
 }
 
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
-	var req model.RegisterRequest
+	var req RegisterRequest
 
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
-		writeError(w, http.StatusBadRequest, err.Error())
+		helper.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	user, err := h.service.Register(r.Context(), req)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, err.Error())
+		helper.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	resp := toUserResponse(user)
 
-	writeSuccess(w, http.StatusOK, resp)
+	helper.WriteSuccess(w, http.StatusOK, resp)
+}
+
+func toUserResponse(user *User) UserResponse {
+	return UserResponse{
+		ID:        user.ID,
+		Name:      user.Name,
+		Email:     user.Email,
+		CreatedAt: user.CreatedAt,
+	}
 }

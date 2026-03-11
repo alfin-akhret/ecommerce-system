@@ -2,17 +2,16 @@ package app
 
 import (
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
-	"github.com/alfin-akhret/ecommerce-system/internal/database"
-	"github.com/alfin-akhret/ecommerce-system/internal/handler"
-	"github.com/alfin-akhret/ecommerce-system/internal/repository"
-	"github.com/alfin-akhret/ecommerce-system/internal/service"
+	"github.com/alfin-akhret/ecommerce-system/internal/auth"
+	"github.com/alfin-akhret/ecommerce-system/internal/user"
+	"github.com/alfin-akhret/ecommerce-system/pkg/database"
 )
 
 type App struct {
 	Config *config.Config
 
-	UserHandler *handler.UserHandler
-	AuthHandler *handler.AuthHandler
+	UserHandler *user.UserHandler
+	AuthHandler *auth.AuthHandler
 }
 
 func New() (*App, error) {
@@ -25,10 +24,10 @@ func New() (*App, error) {
 
 	// rdb := database.NewRedis(cfg.RedisAddr)
 
-	userRepo := repository.NewUserRepository(db)
-	userService := service.NewUserService(userRepo)
-	userHandler := handler.NewUserHandler(userService)
-	authHandler := handler.NewAuthHandler(userService)
+	userRepo := user.NewUserRepository(db)
+	userService := user.NewUserService(userRepo)
+	userHandler := user.NewUserHandler(userService)
+	authHandler := auth.NewAuthHandler(userService)
 
 	return &App{
 		Config:      cfg,

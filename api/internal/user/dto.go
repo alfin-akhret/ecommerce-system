@@ -1,14 +1,6 @@
-package model
+package user
 
 import "time"
-
-type User struct {
-	ID           string
-	Name         string
-	Email        string
-	PasswordHash string
-	CreatedAt    time.Time
-}
 
 type UserResponse struct {
 	ID        string    `json:"id"`
