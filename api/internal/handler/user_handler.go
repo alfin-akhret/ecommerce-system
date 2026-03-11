@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/model"
 	"github.com/alfin-akhret/ecommerce-system/internal/service"
 	"github.com/go-chi/chi"
 )
@@ -54,6 +55,26 @@ func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
 	user, err := h.service.GetUserByID(r.Context(), id)
 	if err != nil {
 		writeError(w, http.StatusNotFound, "user not found")
+		return
+	}
+
+	resp := toUserResponse(user)
+
+	writeJSON(w, http.StatusOK, resp)
+}
+
+func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
+	var req model.RegisterRequest
+
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	user, err := h.service.Register(r.Context(), req)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 

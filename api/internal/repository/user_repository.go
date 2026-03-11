@@ -54,3 +54,26 @@ func (r *UserRepository) FindByID(ctx context.Context, id string) (*model.User, 
 
 	return &user, nil
 }
+
+func (r *UserRepository) FindByEmail(ctx context.Context, email string) (*model.User, error) {
+	query := `
+	select id, name, email, password_hash, created_at
+	from users
+	where email = $1
+	limit 1
+	`
+
+	var user model.User
+	err := r.db.QueryRow(ctx, query, email).Scan(
+		&user.ID,
+		&user.Name,
+		&user.Email,
+		&user.PasswordHash,
+		&user.CreatedAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &user, nil
+}

@@ -20,3 +20,14 @@ GET http://localhost:8080/users/cdc4997b-9d9-4592-9efb-f304474cd761
 
 // test: user found 
 GET http://localhost:8080/users/49a56860-5070-4831-91b6-3811feba0035
+
+###
+// test register
+POST http://localhost:8080/register
+Content-Type: application/json
+
+{
+    "name": "NewUser4",
+    "email": "newUser4@gmail.com",
+    "password": "ChangeMe1234!"
+}

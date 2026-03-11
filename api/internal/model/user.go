@@ -9,3 +9,9 @@ type User struct {
 	PasswordHash string
 	CreatedAt    time.Time
 }
+
+type RegisterRequest struct {
+	Name     string `json:"name"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
