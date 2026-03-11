@@ -1,12 +1,15 @@
+create extension if not exists "pgcrypto";
+
 create table users (
-	id uuid primary KEY,
+	id uuid primary key default gen_random_uuid(),
+	name varchar(255) not null,
 	email varchar(255) unique not null,
 	password_hash text not null,
 	created_at timestamp default now()
 );
 
 create table products (
-	id uuid primary key,
+	id uuid primary key default gen_random_uuid(),
 	name varchar(255) not null,
 	description text,
 	price numeric(12,2) not null,
@@ -14,7 +17,7 @@ create table products (
 );
 
 create table product_inventory (
-	product_id uuid primary key,
+	product_id uuid primary key default gen_random_uuid(),
 	stock int not null,
 	reserved int default 0,
 	updated_at timestamp default now(),
@@ -22,7 +25,7 @@ create table product_inventory (
 );
 
 create table orders (
-	id uuid primary key,
+	id uuid primary key default gen_random_uuid(),
 	user_id uuid not null,
 	status varchar(50) not null,
 	total_amount numeric (12, 2),
@@ -31,7 +34,7 @@ create table orders (
 );
 
 create table order_items (
-	id uuid primary key,
+	id uuid primary key default gen_random_uuid(),
 	order_id uuid not null,
 	product_id uuid not null,
 	quantity int not null,
@@ -41,7 +44,7 @@ create table order_items (
 );
 
 create table payments (
-	id uuid primary key,
+	id uuid primary key default gen_random_uuid(),
 	order_id uuid not null,
 	status varchar(50) not null,
 	payment_method varchar(50),

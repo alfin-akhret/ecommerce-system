@@ -2,9 +2,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
+	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 
 	"github.com/go-chi/chi"
 )
@@ -18,9 +20,20 @@ func main() {
 	r := chi.NewRouter()
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Write([]byte("OK cool"))
+		if _, err := w.Write([]byte("OK cool")); err != nil {
+			log.Printf("health write failed: %v", err)
+		}
 	})
 
+	r.Post("/users", application.UserHandler.CreateUser)
+	r.Get("/users/{id}", application.UserHandler.GetUser)
+	r.Post("/register", application.UserHandler.Register)
+	r.Post("/login", application.AuthHandler.Login)
+	r.With(auth.AuthMiddleware).Get("/me", application.AuthHandler.Me)
+
 	fmt.Println("Server is running on :" + application.Config.Port)
-	http.ListenAndServe(":"+application.Config.Port, r)
+
+	if err := http.ListenAndServe(":"+application.Config.Port, r); err != nil {
+		log.Fatal(err)
+	}
 }
