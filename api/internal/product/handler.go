@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"github.com/go-chi/chi"
 )
 
 type Handler struct {
@@ -40,5 +41,21 @@ func (h *Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	helper.WriteSuccess(w, http.StatusOK, products)
+	return nil
+}
+
+func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) error {
+	id := chi.URLParam(r, "id")
+
+	product, err := h.service.GetProductByID(r.Context(), id)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	if product == nil {
+		return helper.NewHTTPError(http.StatusNotFound, "product not found")
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, product)
 	return nil
 }

@@ -52,3 +52,8 @@ func (s *Service) ListProducts(ctx context.Context) ([]ProductListItem, error) {
 	repo := NewProductRepository(s.db)
 	return repo.ListProducts(ctx)
 }
+
+func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetailResponse, error) {
+	repo := NewProductRepository(s.db)
+	return repo.GetProductByID(ctx, id)
+}

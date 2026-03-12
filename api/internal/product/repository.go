@@ -56,3 +56,35 @@ func (r *Repository) ListProducts(ctx context.Context) ([]ProductListItem, error
 
 	return products, nil
 }
+
+func (r *Repository) GetProductByID(ctx context.Context, id string) (*ProductDetailResponse, error) {
+	query := `SELECT
+		p.id,
+		p.name,
+		p.description,
+		p.price,
+		i.stock,
+		i.reserved,
+		(i.stock - i.reserved) AS available
+	FROM products p
+	JOIN product_inventory i
+		ON p.id = i.product_id
+	WHERE p.id = $1`
+
+	var p ProductDetailResponse
+
+	err := r.db.QueryRow(ctx, query, id).Scan(
+		&p.ID,
+		&p.Name,
+		&p.Description,
+		&p.Price,
+		&p.Stock,
+		&p.Reserved,
+		&p.Available,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	return &p, nil
+}

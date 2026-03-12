@@ -16,13 +16,6 @@ type ProductResponse struct {
 	Price       float64 `json:"price"`
 }
 
-type ProductListItem struct {
-	ID             string  `json:"id"`
-	Name           string  `json:"name"`
-	Price          float64 `json:"price"`
-	AvailableStock int     `json:"available_stock"`
-}
-
 func toProduct(r CreateProductRequest) *Product {
 	return &Product{
 		ID:          uuid.New(),
@@ -39,4 +32,21 @@ func toProductResponse(p *Product) *ProductResponse {
 		Description: p.Description,
 		Price:       p.Price,
 	}
+}
+
+type ProductListItem struct {
+	ID             string  `json:"id"`
+	Name           string  `json:"name"`
+	Price          float64 `json:"price"`
+	AvailableStock int     `json:"available_stock"`
+}
+
+type ProductDetailResponse struct {
+	ID          string  `json:"id"`
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	Stock       int     `json:"stock"`
+	Reserved    int     `json:"reserved"`
+	Available   int     `json:"available"`
 }

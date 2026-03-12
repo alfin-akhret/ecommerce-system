@@ -73,3 +73,7 @@ Content-Type: application/json
 ###
 // test list products
 GET http://localhost:8080/products
+
+###
+// test get product by ID (replace <PRODUCT_ID> with actual product ID)
+GET http://localhost:8080/products/<PRODUCT_ID>
