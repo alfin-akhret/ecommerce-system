@@ -11,7 +11,7 @@ type Repository struct {
 	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
 }
 
-func NewProductRepository(db database.DBTX) *Repository {
+func NewOrderRepository(db database.DBTX) *Repository {
 	return &Repository{
 		db: db,
 	}
@@ -34,6 +34,23 @@ func (r *Repository) CreateOrder(ctx context.Context, o *Order) error {
 		o.UserID,
 		o.Status,
 		o.TotalAmount,
+	)
+
+	return err
+}
+
+func (r *Repository) CreateOrderItem(ctx context.Context, item *OrderItem) error {
+	query := `
+	INSERT INTO order_items (id, order_id, product_id, price, quantity)
+	VALUES ($1,$2,$3,$4,$5)
+	`
+
+	_, err := r.db.Exec(ctx, query,
+		item.ID,
+		item.OrderID,
+		item.ProductID,
+		item.Price,
+		item.Qty,
 	)
 
 	return err

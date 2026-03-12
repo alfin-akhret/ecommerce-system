@@ -1,7 +1,7 @@
 package order
 
 type CreateOrderRequest struct {
-	Items []CreateOrderRequest `json:"items"`
+	Items []OrderItemRequest `json:"items"`
 }
 
 type OrderItemRequest struct {
