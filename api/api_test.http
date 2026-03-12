@@ -94,3 +94,19 @@ Content-Type: application/json
 {
   "qty": 100
 }
+
+### release reserved stock
+POST {{baseUrl}}/products/{{productID}}/release
+Content-Type: application/json
+
+{
+  "qty": 1
+}
+
+### confirm reserved stock
+POST {{baseUrl}}/products/{{productID}}/confirm
+Content-Type: application/json
+
+{
+  "qty": 1
+}

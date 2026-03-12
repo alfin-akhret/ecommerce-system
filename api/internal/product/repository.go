@@ -135,3 +135,30 @@ func (r *Repository) UpdateReserved(ctx context.Context, productID string, qty i
 
 	return err
 }
+
+func (r *Repository) ReleaserReserved(ctx context.Context, productID string, qty int) error {
+	query := `
+	UPDATE product_inventory
+	SET reserved = reserved - $1,
+	    updated_at = now()
+	WHERE product_id = $2
+	`
+	_, err := r.db.Exec(ctx, query, qty, productID)
+
+	return err
+}
+
+func (r *Repository) ConfirmStock(ctx context.Context, productID string, qty int) error {
+
+	query := `
+	UPDATE product_inventory
+	SET stock = stock - $1,
+	    reserved = reserved - $1,
+	    updated_at = now()
+	WHERE product_id = $2
+	`
+
+	_, err := r.db.Exec(ctx, query, qty, productID)
+
+	return err
+}

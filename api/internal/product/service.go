@@ -8,6 +8,7 @@ import (
 )
 
 var ErrNotEnoughStock = errors.New("not enough stock")
+var ErrInvalidReserved = errors.New("invalid reserved quantity")
 
 type Service struct {
 	db   *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
@@ -96,4 +97,56 @@ func (s *Service) ReserveInventory(ctx context.Context, productID string, qty in
 
 	return tx.Commit(ctx)
 
+}
+
+func (s *Service) ReleaseInventory(ctx context.Context, productID string, qty int) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	repo := NewProductRepository(tx)
+
+	inv, err := repo.GetInventoryForUpdate(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if inv.Reserved < qty {
+		return ErrInvalidReserved
+	}
+
+	if err := repo.ReleaserReserved(ctx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+
+}
+
+func (s *Service) ConfirmInventory(ctx context.Context, productID string, qty int) error {
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	repo := NewProductRepository(tx)
+
+	inv, err := repo.GetInventoryForUpdate(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if inv.Reserved < qty {
+		return ErrInvalidReserved
+	}
+
+	if err := repo.ConfirmStock(ctx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

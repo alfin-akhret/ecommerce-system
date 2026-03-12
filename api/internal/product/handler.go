@@ -101,3 +101,41 @@ func (h *Handler) ReserveStock(w http.ResponseWriter, r *http.Request) error {
 
 	return nil
 }
+
+func (h *Handler) ReleaseStock(w http.ResponseWriter, r *http.Request) error {
+
+	id := chi.URLParam(r, "id")
+
+	var req UpdateStockRequest
+	if err := helper.DecodeJSON(r, &req); err != nil {
+		return err
+	}
+
+	err := h.service.ReleaseInventory(r.Context(), id, req.Qty)
+	if err != nil {
+		return err
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, "stock released")
+
+	return nil
+}
+
+func (h *Handler) ConfirmStock(w http.ResponseWriter, r *http.Request) error {
+
+	id := chi.URLParam(r, "id")
+
+	var req UpdateStockRequest
+	if err := helper.DecodeJSON(r, &req); err != nil {
+		return err
+	}
+
+	err := h.service.ConfirmInventory(r.Context(), id, req.Qty)
+	if err != nil {
+		return err
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, "stock confirmed")
+
+	return nil
+}
