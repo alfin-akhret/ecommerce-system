@@ -36,6 +36,7 @@ func main() {
 		r.Post("/", helper.Handle(application.ProductHandler.CreateProduct))
 		r.Get("/", helper.Handle(application.ProductHandler.ListProducts))
 		r.Get("/{id}", helper.Handle(application.ProductHandler.GetProduct))
+		r.Patch("/{id}/stock", helper.Handle(application.ProductHandler.UpdateStock))
 	})
 
 	fmt.Println("Server is running on :" + application.Config.Port)

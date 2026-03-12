@@ -50,3 +50,7 @@ type ProductDetailResponse struct {
 	Reserved    int     `json:"reserved"`
 	Available   int     `json:"available"`
 }
+
+type UpdateStockRequest struct {
+	Qty int `json:"qty"`
+}

@@ -59,3 +59,22 @@ func (h *Handler) GetProduct(w http.ResponseWriter, r *http.Request) error {
 	helper.WriteSuccess(w, http.StatusOK, product)
 	return nil
 }
+
+func (h *Handler) UpdateStock(w http.ResponseWriter, r *http.Request) error {
+
+	id := chi.URLParam(r, "id")
+
+	var req UpdateStockRequest
+	if err := helper.DecodeJSON(r, &req); err != nil {
+		return err
+	}
+
+	err := h.service.UpdateStock(r.Context(), id, req.Qty)
+	if err != nil {
+		return err
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, "stock updated")
+
+	return nil
+}

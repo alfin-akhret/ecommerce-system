@@ -95,3 +95,16 @@ func (r *Repository) GetProductByID(ctx context.Context, id string) (*ProductDet
 
 	return &p, nil
 }
+
+func (r *Repository) UpdateStock(ctx context.Context, productID string, qty int) error {
+
+	query := `
+	UPDATE product_inventory
+	SET stock = stock + $2,
+	    updated_at = now()
+	WHERE product_id = $1
+	`
+
+	_, err := r.db.Exec(ctx, query, productID, qty)
+	return err
+}

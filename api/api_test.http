@@ -68,3 +68,11 @@ GET {{baseUrl}}/products
 
 ### Get product by ID (replace <PRODUCT_ID> with actual product ID)
 GET {{baseUrl}}/products/<PRODUCT_ID>
+
+### update product stock (replace <PRODUCT_ID> with actual product ID)
+PATCH http://localhost:8080/products/{{product_id}}/stock
+Content-Type: application/json
+
+{
+  "qty": 5
+}

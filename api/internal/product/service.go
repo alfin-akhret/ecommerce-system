@@ -62,3 +62,7 @@ func (s *Service) ListProducts(ctx context.Context) ([]ProductListItem, error) {
 func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetailResponse, error) {
 	return s.repo.GetProductByID(ctx, id)
 }
+
+func (s *Service) UpdateStock(ctx context.Context, productID string, qty int) error {
+	return s.repo.UpdateStock(ctx, productID, qty)
+}
