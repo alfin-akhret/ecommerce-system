@@ -30,7 +30,10 @@ func main() {
 	r.Post("/register", application.UserHandler.Register)
 	r.Post("/login", application.AuthHandler.Login)
 	r.With(auth.AuthMiddleware).Get("/me", application.AuthHandler.Me)
-	r.With(auth.AuthMiddleware).Post("/products", application.ProductHandler.CreateProduct)
+
+	r.Route("/products", func(r chi.Router) {
+		r.Post("/", application.ProductHandler.CreateProduct)
+	})
 
 	fmt.Println("Server is running on :" + application.Config.Port)
 

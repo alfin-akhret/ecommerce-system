@@ -25,10 +25,17 @@ func (h *Handler) CreateProduct(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	resp, err := h.service.CreateProduct(r.Context(), req)
+	product, err := h.service.CreateProduct(r.Context(), req)
 	if err != nil {
 		helper.WriteError(w, http.StatusInternalServerError, err.Error())
 		return
+	}
+
+	resp := ProductResponse{
+		ID:          product.ID.String(),
+		Name:        product.Name,
+		Description: product.Description,
+		Price:       product.Price,
 	}
 
 	helper.WriteSuccess(w, http.StatusCreated, resp)

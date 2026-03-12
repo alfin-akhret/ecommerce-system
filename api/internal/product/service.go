@@ -15,7 +15,7 @@ func NewService(db *pgxpool.Pool) *Service {
 	return &Service{db: db}
 }
 
-func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*ProductResponse, error) {
+func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return nil, err
@@ -49,12 +49,7 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 	if err != nil {
 		return nil, err
 	}
-	return &ProductResponse{
-		ID:          product.ID.String(),
-		Name:        product.Name,
-		Description: product.Description,
-		Price:       product.Price,
-		Stock:       inv.Stock,
-	}, nil
+
+	return product, nil
 
 }
