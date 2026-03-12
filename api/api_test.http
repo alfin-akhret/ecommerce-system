@@ -56,3 +56,16 @@ Content-Type: application/json
 // test me (replace <TOKEN> with login token)
 GET http://localhost:8080/me
 Authorization: Bearer <TOKEN>
+
+###
+// test create product (replace <TOKEN> with login token)
+POST http://localhost:8080/products
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+    "name": "T-Shirt",
+    "description": "Cotton tee",
+    "price": 19.99,
+    "stock": 50
+}
