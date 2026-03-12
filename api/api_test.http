@@ -63,8 +63,21 @@ Content-Type: application/json
   "stock": 50
 }
 
+### Create product - Tas (quantity 50)
+POST {{baseUrl}}/products
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "name": "Tas",
+  "description": "Tas harian",
+  "price": 79.99,
+  "stock": 50
+}
+
 ### PRODUCT
-@productID = 0c8eb080-8e13-4ffc-893a-597f8c7ade70
+@productID = 2c1a33e2-450a-4934-8c29-30b279cbdb51
+@tasProductID = 4bca11d2-a736-4827-a694-177b1d1ca3e8
 ### List products
 GET {{baseUrl}}/products
 
@@ -84,7 +97,7 @@ POST {{baseUrl}}/products/{{productID}}/reserve
 Content-Type: application/json
 
 {
-  "qty": 2
+  "qty": 8
 }
 
 ### reserve stock (oversell)
@@ -109,4 +122,16 @@ Content-Type: application/json
 
 {
   "qty": 1
+}
+
+### create order (T-Shirt 20, Tas 15)
+POST {{baseUrl}}/orders
+Authorization: Bearer <TOKEN>
+Content-Type: application/json
+
+{
+  "items": [
+    { "product_id": "{{productID}}", "qty": 20 },
+    { "product_id": "{{tasProductID}}", "qty": 15 }
+  ]
 }

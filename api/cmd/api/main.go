@@ -31,6 +31,7 @@ func main() {
 	r.Post("/register", helper.Handle(application.UserHandler.Register))
 	r.Post("/login", helper.Handle(application.AuthHandler.Login))
 	r.With(auth.AuthMiddleware).Get("/me", helper.Handle(application.AuthHandler.Me))
+	r.With(auth.AuthMiddleware).Post("/orders", helper.Handle(application.OrderHandler.CreateOrder))
 
 	r.Route("/products", func(r chi.Router) {
 		r.Post("/", helper.Handle(application.ProductHandler.CreateProduct))

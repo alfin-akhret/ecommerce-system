@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
+	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
 	"github.com/alfin-akhret/ecommerce-system/internal/product"
 	"github.com/alfin-akhret/ecommerce-system/internal/user"
@@ -14,6 +15,7 @@ type App struct {
 	UserHandler    *user.UserHandler
 	AuthHandler    *auth.AuthHandler
 	ProductHandler *product.Handler
+	OrderHandler   *order.Handler
 }
 
 func New() (*App, error) {
@@ -36,10 +38,15 @@ func New() (*App, error) {
 	productService := product.NewService(db)
 	productHandler := product.NewHandler(productService)
 
+	// order
+	orderService := order.NewService(db)
+	orderHandler := order.NewHandler(orderService)
+
 	return &App{
 		Config:         cfg,
 		UserHandler:    userHandler,
 		AuthHandler:    authHandler,
 		ProductHandler: productHandler,
+		OrderHandler:   orderHandler,
 	}, nil
 }
