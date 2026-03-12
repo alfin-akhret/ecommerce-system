@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
+	"github.com/jackc/pgx/v5"
 )
 
 /*
@@ -14,11 +15,17 @@ type Repository interface {
 */
 
 type Repository struct {
-	db database.DBTX
+	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
 }
 
 func NewProductRepository(db database.DBTX) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) WithTx(tx pgx.Tx) *Repository {
+	return &Repository{
+		db: tx,
+	}
 }
 
 func (r *Repository) CreateProduct(ctx context.Context, p *Product) error {

@@ -7,11 +7,18 @@ import (
 )
 
 type Service struct {
-	db *pgxpool.Pool // for transactions
+	db   *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
+	repo *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
 }
 
 func NewService(db *pgxpool.Pool) *Service {
-	return &Service{db: db}
+
+	repo := NewProductRepository(db)
+
+	return &Service{
+		db:   db,
+		repo: repo,
+	}
 }
 
 func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (*Product, error) {
@@ -21,7 +28,7 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 	}
 	defer tx.Rollback(ctx)
 
-	repo := NewProductRepository(tx)
+	repo := s.repo.WithTx(tx)
 
 	product := toProduct(req)
 
@@ -49,11 +56,9 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 }
 
 func (s *Service) ListProducts(ctx context.Context) ([]ProductListItem, error) {
-	repo := NewProductRepository(s.db)
-	return repo.ListProducts(ctx)
+	return s.repo.ListProducts(ctx)
 }
 
 func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetailResponse, error) {
-	repo := NewProductRepository(s.db)
-	return repo.GetProductByID(ctx, id)
+	return s.repo.GetProductByID(ctx, id)
 }
