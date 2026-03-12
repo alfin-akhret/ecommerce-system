@@ -14,10 +14,10 @@ Content-Type: application/json
 }
 
 ### Get user (not found)
-GET {{baseUrl}}/users/cdc4997b-9d9-4592-9efb-f304474cd761
+GET {{baseUrl}}/users/<USER_ID>
 
 ### Get user (found)
-GET {{baseUrl}}/users/49a56860-5070-4831-91b6-3811feba0035
+GET {{baseUrl}}/users/<USER_ID>
 
 ### Register
 POST {{baseUrl}}/register
@@ -63,16 +63,34 @@ Content-Type: application/json
   "stock": 50
 }
 
+### PRODUCT
+@productID = 0c8eb080-8e13-4ffc-893a-597f8c7ade70
 ### List products
 GET {{baseUrl}}/products
 
 ### Get product by ID (replace <PRODUCT_ID> with actual product ID)
-GET {{baseUrl}}/products/<PRODUCT_ID>
+GET {{baseUrl}}/products/{{productID}}
 
 ### update product stock (replace <PRODUCT_ID> with actual product ID)
-PATCH http://localhost:8080/products/{{product_id}}/stock
+PATCH {{baseUrl}}/products/{{productID}}/stock
 Content-Type: application/json
 
 {
   "qty": 5
+}
+
+### reserve stock
+POST {{baseUrl}}/products/{{productID}}/reserve
+Content-Type: application/json
+
+{
+  "qty": 2
+}
+
+### reserve stock (oversell)
+POST {{baseUrl}}/products/{{productID}}/reserve
+Content-Type: application/json
+
+{
+  "qty": 100
 }
