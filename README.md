@@ -11,6 +11,14 @@ Backend e-commerce (work in progress) written in Go. The repo currently contains
   - `POST /login` (JWT login)
   - `GET /me` (protected, requires `Authorization: Bearer <token>`)
   - `GET /users/{id}`
+  - `POST /products` (create product + inventory)
+  - `GET /products`
+  - `GET /products/{id}`
+  - `PATCH /products/{id}/stock`
+  - `POST /products/{id}/reserve`
+  - `POST /products/{id}/release`
+  - `POST /products/{id}/confirm`
+  - `POST /orders` (protected)
 - Postgres schema migrations for:
   - `users`, `products`, `product_inventory`, `orders`, `order_items`, `payments`
 - Local infrastructure via Docker Compose: Postgres + Redis
@@ -27,6 +35,8 @@ Key locations:
 - `api/internal/app/app.go`: dependency wiring (config, DB, handlers)
 - `api/internal/auth/`: auth domain (JWT, middleware, handler)
 - `api/internal/user/`: user domain (model, dto, repository, service, handler)
+- `api/internal/product/`: product + inventory domain
+- `api/internal/order/`: order domain
 - `api/pkg/database/`: DB clients (`pgxpool`, Redis client)
 - `api/pkg/helper/`: shared response helpers
 - `api/migrations/`: SQL schema migrations (currently manual/external-tool driven)
@@ -99,6 +109,52 @@ This endpoint is implemented in:
 
 You can also use the scratch file `api/api_test.http` to try the endpoints from an IDE HTTP client.
 
+### Products
+
+- `POST /products`
+- Content-Type: `application/json`
+- Body:
+
+```json
+{
+  "name": "T-Shirt",
+  "description": "Cotton tee",
+  "price": 19.99,
+  "stock": 50
+}
+```
+
+- Response: `201 Created`
+
+### Reserve / Release / Confirm Stock
+
+- `POST /products/{id}/reserve`
+- `POST /products/{id}/release`
+- `POST /products/{id}/confirm`
+- Content-Type: `application/json`
+- Body:
+
+```json
+{
+  "qty": 2
+}
+```
+
+### Create Order
+
+- `POST /orders`
+- Header: `Authorization: Bearer <token>`
+- Content-Type: `application/json`
+- Body:
+
+```json
+{
+  "items": [
+    { "product_id": "<product-id>", "qty": 2 }
+  ]
+}
+```
+
 ## Configuration
 
 The API reads env vars (with defaults) in `api/internal/config/config.go`:
@@ -145,4 +201,4 @@ Server prints the port and listens on `http://localhost:8080` by default.
 
 ## Notes / Next Work
 
-- The DB schema already includes products, inventory, orders, and payments, but the Go implementation currently only exposes basic user and auth endpoints.
+- Payments are not implemented yet.
