@@ -2,9 +2,13 @@ package product
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
+
+var ErrNotEnoughStock = errors.New("not enough stock")
+var ErrInvalidReserved = errors.New("invalid reserved quantity")
 
 type Service struct {
 	db   *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
@@ -61,4 +65,88 @@ func (s *Service) ListProducts(ctx context.Context) ([]ProductListItem, error) {
 
 func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetailResponse, error) {
 	return s.repo.GetProductByID(ctx, id)
+}
+
+func (s *Service) UpdateStock(ctx context.Context, productID string, qty int) error {
+	return s.repo.UpdateStock(ctx, productID, qty)
+}
+
+func (s *Service) ReserveInventory(ctx context.Context, productID string, qty int) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	repo := NewProductRepository(tx)
+
+	inv, err := repo.GetInventoryForUpdate(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	available := inv.Stock - inv.Reserved
+
+	if available < qty {
+		return ErrNotEnoughStock
+	}
+
+	if err := repo.UpdateReserved(ctx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+
+}
+
+func (s *Service) ReleaseInventory(ctx context.Context, productID string, qty int) error {
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	repo := NewProductRepository(tx)
+
+	inv, err := repo.GetInventoryForUpdate(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if inv.Reserved < qty {
+		return ErrInvalidReserved
+	}
+
+	if err := repo.ReleaserReserved(ctx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+
+}
+
+func (s *Service) ConfirmInventory(ctx context.Context, productID string, qty int) error {
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	repo := NewProductRepository(tx)
+
+	inv, err := repo.GetInventoryForUpdate(ctx, productID)
+	if err != nil {
+		return err
+	}
+
+	if inv.Reserved < qty {
+		return ErrInvalidReserved
+	}
+
+	if err := repo.ConfirmStock(ctx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }

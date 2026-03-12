@@ -1,79 +1,112 @@
-GET http://localhost:8080/health
+@baseUrl = http://localhost:8080
 
-###
+### Health
+GET {{baseUrl}}/health
 
-POST http://localhost:8080/users
+### Create user
+POST {{baseUrl}}/users
 Content-Type: application/json
 
 {
-    "name": "NewUser2",
-    "email": "newUser2@gmail.com",
-    "password": "ChangeMe123!"
+  "name": "NewUser2",
+  "email": "newUser2@gmail.com",
+  "password": "ChangeMe123!"
 }
 
-###
+### Get user (not found)
+GET {{baseUrl}}/users/<USER_ID>
 
-// test: user not found
-GET http://localhost:8080/users/cdc4997b-9d9-4592-9efb-f304474cd761
+### Get user (found)
+GET {{baseUrl}}/users/<USER_ID>
 
-###
-
-// test: user found 
-GET http://localhost:8080/users/49a56860-5070-4831-91b6-3811feba0035
-
-###
-// test register
-POST http://localhost:8080/register
+### Register
+POST {{baseUrl}}/register
 Content-Type: application/json
 
 {
-    "name": "NewUser4",
-    "email": "newUser4@gmail.com",
-    "password": "ChangeMe1234!"
+  "name": "NewUser4",
+  "email": "newUser4@gmail.com",
+  "password": "ChangeMe1234!"
 }
 
-###
-// test login success
-POST http://localhost:8080/login
+### Login (success)
+POST {{baseUrl}}/login
 Content-Type: application/json
 
 {
-    "email": "newUser4@gmail.com",
-    "password": "ChangeMe1234!"
+  "email": "newUser4@gmail.com",
+  "password": "ChangeMe1234!"
 }
 
-###
-// test login invalid credentials
-POST http://localhost:8080/login
+### Login (invalid credentials)
+POST {{baseUrl}}/login
 Content-Type: application/json
 
 {
-    "email": "newUser4@gmail.com",
-    "password": "wrong-password"
+  "email": "newUser4@gmail.com",
+  "password": "wrong-password"
 }
 
-###
-// test me (replace <TOKEN> with login token)
-GET http://localhost:8080/me
+### Me (replace <TOKEN> with login token)
+GET {{baseUrl}}/me
 Authorization: Bearer <TOKEN>
 
-###
-// test create product (replace <TOKEN> with login token)
-POST http://localhost:8080/products
+### Create product (replace <TOKEN> with login token)
+POST {{baseUrl}}/products
 Authorization: Bearer <TOKEN>
 Content-Type: application/json
 
 {
-    "name": "T-Shirt",
-    "description": "Cotton tee",
-    "price": 19.99,
-    "stock": 50
+  "name": "T-Shirt",
+  "description": "Cotton tee",
+  "price": 19.99,
+  "stock": 50
 }
 
-###
-// test list products
-GET http://localhost:8080/products
+### PRODUCT
+@productID = 0c8eb080-8e13-4ffc-893a-597f8c7ade70
+### List products
+GET {{baseUrl}}/products
 
-###
-// test get product by ID (replace <PRODUCT_ID> with actual product ID)
-GET http://localhost:8080/products/<PRODUCT_ID>
+### Get product by ID (replace <PRODUCT_ID> with actual product ID)
+GET {{baseUrl}}/products/{{productID}}
+
+### update product stock (replace <PRODUCT_ID> with actual product ID)
+PATCH {{baseUrl}}/products/{{productID}}/stock
+Content-Type: application/json
+
+{
+  "qty": 5
+}
+
+### reserve stock
+POST {{baseUrl}}/products/{{productID}}/reserve
+Content-Type: application/json
+
+{
+  "qty": 2
+}
+
+### reserve stock (oversell)
+POST {{baseUrl}}/products/{{productID}}/reserve
+Content-Type: application/json
+
+{
+  "qty": 100
+}
+
+### release reserved stock
+POST {{baseUrl}}/products/{{productID}}/release
+Content-Type: application/json
+
+{
+  "qty": 1
+}
+
+### confirm reserved stock
+POST {{baseUrl}}/products/{{productID}}/confirm
+Content-Type: application/json
+
+{
+  "qty": 1
+}
