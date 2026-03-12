@@ -78,6 +78,7 @@ Content-Type: application/json
 ### PRODUCT
 @productID = 2c1a33e2-450a-4934-8c29-30b279cbdb51
 @tasProductID = 4bca11d2-a736-4827-a694-177b1d1ca3e8
+@orderID = <ORDER_ID>
 ### List products
 GET {{baseUrl}}/products
 
@@ -135,3 +136,11 @@ Content-Type: application/json
     { "product_id": "{{tasProductID}}", "qty": 15 }
   ]
 }
+
+### list orders
+GET {{baseUrl}}/orders
+Authorization: Bearer <TOKEN>
+
+### get order by id
+GET {{baseUrl}}/orders/{{orderID}}
+Authorization: Bearer <TOKEN>

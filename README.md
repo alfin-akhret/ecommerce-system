@@ -19,6 +19,8 @@ Backend e-commerce (work in progress) written in Go. The repo currently contains
   - `POST /products/{id}/release`
   - `POST /products/{id}/confirm`
   - `POST /orders` (protected)
+  - `GET /orders` (protected)
+  - `GET /orders/{id}` (protected)
 - Postgres schema migrations for:
   - `users`, `products`, `product_inventory`, `orders`, `order_items`, `payments`
 - Local infrastructure via Docker Compose: Postgres + Redis
@@ -154,6 +156,18 @@ You can also use the scratch file `api/api_test.http` to try the endpoints from 
   ]
 }
 ```
+
+### List Orders
+
+- `GET /orders`
+- Header: `Authorization: Bearer <token>`
+- Response: `200 OK` with list of the user's orders.
+
+### Get Order By ID
+
+- `GET /orders/{id}`
+- Header: `Authorization: Bearer <token>`
+- Response: `200 OK` with order detail and items.
 
 ## Configuration
 

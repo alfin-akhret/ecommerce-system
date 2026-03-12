@@ -3,13 +3,16 @@ package order
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/product"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var ErrInvalidQty = errors.New("invalid quantity")
+var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
 	db   *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
@@ -109,4 +112,57 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 
 	return tx.Commit(ctx)
 
+}
+
+func (s *Service) ListOrders(ctx context.Context, userID string) ([]OrderListItem, error) {
+	orders, err := s.repo.ListOrdersByUser(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]OrderListItem, 0, len(orders))
+	for _, o := range orders {
+		items = append(items, OrderListItem{
+			ID:          o.ID.String(),
+			Status:      o.Status,
+			TotalAmount: o.TotalAmount,
+			CreatedAt:   o.CreatedAt.Format(time.RFC3339),
+		})
+	}
+
+	return items, nil
+}
+
+func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (*OrderResponse, error) {
+	order, err := s.repo.GetOrderByID(ctx, userID, orderID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrOrderNotFound
+		}
+		return nil, err
+	}
+
+	orderItems, err := s.repo.ListOrderItems(ctx, orderID)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]OrderItemResponse, 0, len(orderItems))
+	for _, item := range orderItems {
+		items = append(items, OrderItemResponse{
+			ID:        item.ID.String(),
+			ProductID: item.ProductID.String(),
+			Price:     item.Price,
+			Qty:       item.Qty,
+		})
+	}
+
+	return &OrderResponse{
+		ID:          order.ID.String(),
+		UserID:      order.UserID.String(),
+		Status:      order.Status,
+		TotalAmount: order.TotalAmount,
+		CreatedAt:   order.CreatedAt.Format(time.RFC3339),
+		Items:       items,
+	}, nil
 }
