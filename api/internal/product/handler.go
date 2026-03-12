@@ -32,3 +32,13 @@ func (h *Handler) CreateProduct(w http.ResponseWriter, r *http.Request) error {
 	helper.WriteSuccess(w, http.StatusCreated, resp)
 	return nil
 }
+
+func (h *Handler) ListProducts(w http.ResponseWriter, r *http.Request) error {
+	products, err := h.service.ListProducts(r.Context())
+	if err != nil {
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, products)
+	return nil
+}

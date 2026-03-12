@@ -47,3 +47,8 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 	return product, nil
 
 }
+
+func (s *Service) ListProducts(ctx context.Context) ([]ProductListItem, error) {
+	repo := NewProductRepository(s.db)
+	return repo.ListProducts(ctx)
+}

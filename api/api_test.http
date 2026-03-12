@@ -69,3 +69,7 @@ Content-Type: application/json
     "price": 19.99,
     "stock": 50
 }
+
+###
+// test list products
+GET http://localhost:8080/products

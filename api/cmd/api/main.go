@@ -34,6 +34,7 @@ func main() {
 
 	r.Route("/products", func(r chi.Router) {
 		r.Post("/", helper.Handle(application.ProductHandler.CreateProduct))
+		r.Get("/", helper.Handle(application.ProductHandler.ListProducts))
 	})
 
 	fmt.Println("Server is running on :" + application.Config.Port)
