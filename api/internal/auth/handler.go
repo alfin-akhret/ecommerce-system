@@ -36,7 +36,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	token, err := GenerateToken(account.ID)
+	token, err := GenerateToken(account.ID.String())
 	if err != nil {
 		helper.WriteError(w, http.StatusInternalServerError, "failed to generate token")
 		return

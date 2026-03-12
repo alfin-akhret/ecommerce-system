@@ -3,8 +3,8 @@ package app
 import (
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
+	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
 	"github.com/alfin-akhret/ecommerce-system/internal/user"
-	"github.com/alfin-akhret/ecommerce-system/pkg/database"
 )
 
 type App struct {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -37,6 +38,7 @@ func (s *UserService) createUser(ctx context.Context, name string, email string,
 	}
 
 	user := &User{
+		ID:           uuid.New(),
 		Name:         name,
 		Email:        email,
 		PasswordHash: string(hash),

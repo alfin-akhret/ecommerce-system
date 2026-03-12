@@ -84,7 +84,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 func toUserResponse(user *User) UserResponse {
 	return UserResponse{
-		ID:        user.ID,
+		ID:        user.ID.String(),
 		Name:      user.Name,
 		Email:     user.Email,
 		CreatedAt: user.CreatedAt,
