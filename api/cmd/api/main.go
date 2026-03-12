@@ -7,6 +7,7 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 
 	"github.com/go-chi/chi"
 )
@@ -25,14 +26,14 @@ func main() {
 		}
 	})
 
-	r.Post("/users", application.UserHandler.CreateUser)
-	r.Get("/users/{id}", application.UserHandler.GetUser)
-	r.Post("/register", application.UserHandler.Register)
-	r.Post("/login", application.AuthHandler.Login)
-	r.With(auth.AuthMiddleware).Get("/me", application.AuthHandler.Me)
+	r.Post("/users", helper.Handle(application.UserHandler.CreateUser))
+	r.Get("/users/{id}", helper.Handle(application.UserHandler.GetUser))
+	r.Post("/register", helper.Handle(application.UserHandler.Register))
+	r.Post("/login", helper.Handle(application.AuthHandler.Login))
+	r.With(auth.AuthMiddleware).Get("/me", helper.Handle(application.AuthHandler.Me))
 
 	r.Route("/products", func(r chi.Router) {
-		r.Post("/", application.ProductHandler.CreateProduct)
+		r.Post("/", helper.Handle(application.ProductHandler.CreateProduct))
 	})
 
 	fmt.Println("Server is running on :" + application.Config.Port)

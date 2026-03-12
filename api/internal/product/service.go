@@ -3,7 +3,6 @@ package product
 import (
 	"context"
 
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -24,12 +23,7 @@ func (s *Service) CreateProduct(ctx context.Context, req CreateProductRequest) (
 
 	repo := NewProductRepository(tx)
 
-	product := &Product{
-		ID:          uuid.New(),
-		Name:        req.Name,
-		Description: req.Description,
-		Price:       req.Price,
-	}
+	product := toProduct(req)
 
 	if err := repo.CreateProduct(ctx, product); err != nil {
 		return nil, err

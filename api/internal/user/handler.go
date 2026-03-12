@@ -1,7 +1,6 @@
 package user
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -22,13 +21,11 @@ type createUserRequest struct {
 	Password string `json:"password"`
 }
 
-func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) error {
 	var req createUserRequest
 
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		helper.WriteError(w, http.StatusBadRequest, err.Error())
-		return
+	if err := helper.DecodeJSON(r, &req); err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	user, err := h.service.CreateUser(
@@ -39,47 +36,45 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	)
 
 	if err != nil {
-		helper.WriteError(w, http.StatusInternalServerError, err.Error())
-		return
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	resp := toUserResponse(user)
 
 	helper.WriteSuccess(w, http.StatusCreated, resp)
+	return nil
 }
 
-func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) GetUser(w http.ResponseWriter, r *http.Request) error {
 	id := chi.URLParam(r, "id")
 
 	user, err := h.service.GetUserByID(r.Context(), id)
 	if err != nil {
-		helper.WriteError(w, http.StatusNotFound, "user not found")
-		return
+		return helper.NewHTTPError(http.StatusNotFound, "user not found")
 	}
 
 	resp := toUserResponse(user)
 
 	helper.WriteSuccess(w, http.StatusOK, resp)
+	return nil
 }
 
-func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
+func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) error {
 	var req RegisterRequest
 
-	err := json.NewDecoder(r.Body).Decode(&req)
-	if err != nil {
-		helper.WriteError(w, http.StatusBadRequest, err.Error())
-		return
+	if err := helper.DecodeJSON(r, &req); err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
 	user, err := h.service.Register(r.Context(), req)
 	if err != nil {
-		helper.WriteError(w, http.StatusInternalServerError, err.Error())
-		return
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	resp := toUserResponse(user)
 
 	helper.WriteSuccess(w, http.StatusOK, resp)
+	return nil
 }
 
 func toUserResponse(user *User) UserResponse {
