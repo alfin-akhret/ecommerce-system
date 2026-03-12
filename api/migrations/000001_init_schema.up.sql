@@ -37,6 +37,7 @@ create table order_items (
 	product_id uuid not null,
 	quantity int not null,
 	price numeric(12,2) not null,
+	created_at timestamp default now(),
 	foreign key (order_id) references orders(id),
 	foreign key (product_id) references products(id)
 );
