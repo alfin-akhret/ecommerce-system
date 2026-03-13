@@ -1,0 +1,22 @@
+ALTER TABLE payments
+DROP CONSTRAINT payments_order_id_unique;
+
+ALTER TABLE product_inventory
+ALTER COLUMN reserved DROP NOT NULL,
+ALTER COLUMN reserved DROP DEFAULT;
+
+ALTER TABLE order_items
+ALTER COLUMN created_at DROP NOT NULL,
+ALTER COLUMN created_at DROP DEFAULT;
+
+ALTER TABLE orders
+ALTER COLUMN created_at DROP NOT NULL,
+ALTER COLUMN created_at DROP DEFAULT;
+
+ALTER TABLE products
+ALTER COLUMN created_at DROP NOT NULL,
+ALTER COLUMN created_at DROP DEFAULT;
+
+ALTER TABLE users
+ALTER COLUMN created_at DROP NOT NULL,
+ALTER COLUMN created_at DROP DEFAULT;
