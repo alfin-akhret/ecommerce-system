@@ -1,0 +1,2 @@
+ALTER TABLE order_items
+DROP CONSTRAINT check_quantity_positive;
