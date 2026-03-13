@@ -30,19 +30,23 @@ func main() {
 	r.Get("/users/{id}", helper.Handle(application.UserHandler.GetUser))
 	r.Post("/register", helper.Handle(application.UserHandler.Register))
 	r.Post("/login", helper.Handle(application.AuthHandler.Login))
+
+	// protected: khusus user
 	r.With(auth.AuthMiddleware).Get("/me", helper.Handle(application.AuthHandler.Me))
 	r.With(auth.AuthMiddleware).Post("/orders", helper.Handle(application.OrderHandler.CreateOrder))
 	r.With(auth.AuthMiddleware).Get("/orders", helper.Handle(application.OrderHandler.ListOrders))
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
 
 	r.Route("/products", func(r chi.Router) {
-		r.Post("/", helper.Handle(application.ProductHandler.CreateProduct))
 		r.Get("/", helper.Handle(application.ProductHandler.ListProducts))
 		r.Get("/{id}", helper.Handle(application.ProductHandler.GetProduct))
-		r.Patch("/{id}/stock", helper.Handle(application.ProductHandler.UpdateStock))
-		r.Post("/{id}/reserve", helper.Handle(application.ProductHandler.ReserveStock))
-		r.Post("/{id}/release", helper.Handle(application.ProductHandler.ReleaseStock))
-		r.Post("/{id}/confirm", helper.Handle(application.ProductHandler.ConfirmStock))
+
+		// protected: khusus admin/internal
+		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/", helper.Handle(application.ProductHandler.CreateProduct))
+		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Patch("/{id}/stock", helper.Handle(application.ProductHandler.UpdateStock))
+		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/{id}/reserve", helper.Handle(application.ProductHandler.ReserveStock))
+		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/{id}/release", helper.Handle(application.ProductHandler.ReleaseStock))
+		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/{id}/confirm", helper.Handle(application.ProductHandler.ConfirmStock))
 
 	})
 
