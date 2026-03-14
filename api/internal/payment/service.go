@@ -3,6 +3,7 @@ package payment
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +15,17 @@ type Service struct {
 	db   *pgxpool.Pool
 	repo *Repository
 }
+
+const (
+	StatusPending   = "PENDING"
+	StatusSuccess   = "SUCCESS"
+	StatusFailed    = "FAILED"
+	StatusCancelled = "CANCELLED"
+)
+
+var ErrInvalidAmount = errors.New("amount must be greater than 0")
+var ErrInvalidPaymentMethod = errors.New("payment method is required")
+var ErrInvalidStatus = errors.New("invalid payment status")
 
 func NewService(db *pgxpool.Pool) *Service {
 	return &Service{
@@ -52,16 +64,23 @@ func (s *Service) GetPaymentByOrderID(ctx context.Context, orderID string) (*Pay
 
 func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID string, amount float64, paymentMethod string) (*CreatePaymentResponse, error) {
 	if amount <= 0 {
-		return nil, errors.New("amount must be greater than 0")
+		return nil, ErrInvalidAmount
+	}
+	if strings.TrimSpace(paymentMethod) == "" {
+		return nil, ErrInvalidPaymentMethod
 	}
 
 	paymentID := uuid.New().String()
 	now := time.Now()
+	orderUUID, err := uuid.Parse(orderID)
+	if err != nil {
+		return nil, err
+	}
 	p := &Payment{
 		ID:            uuid.MustParse(paymentID),
-		OrderID:       uuid.MustParse(orderID),
+		OrderID:       orderUUID,
 		Amount:        amount,
-		Status:        "PENDING",
+		Status:        StatusPending,
 		PaymentMethod: paymentMethod,
 		CreatedAt:     now,
 		UpdatedAt:     now,
@@ -86,9 +105,14 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 }
 
 func (s *Service) updatePaymentStatus(ctx context.Context, repo *Repository, paymentID string, status string) (*Payment, error) {
-	paidAt := paidAtForStatus(status)
+	normalizedStatus, err := normalizeStatus(status)
+	if err != nil {
+		return nil, err
+	}
 
-	if err := repo.UpdateStatus(ctx, paymentID, status, paidAt); err != nil {
+	paidAt := paidAtForStatus(normalizedStatus)
+
+	if err := repo.UpdateStatus(ctx, paymentID, normalizedStatus, paidAt); err != nil {
 		return nil, err
 	}
 
@@ -96,10 +120,20 @@ func (s *Service) updatePaymentStatus(ctx context.Context, repo *Repository, pay
 }
 
 func paidAtForStatus(status string) *time.Time {
-	if status == "paid" {
+	if status == StatusSuccess {
 		t := time.Now()
 		return &t
 	}
 
 	return nil
+}
+
+func normalizeStatus(status string) (string, error) {
+	normalized := strings.ToUpper(strings.TrimSpace(status))
+	switch normalized {
+	case StatusPending, StatusSuccess, StatusFailed, StatusCancelled:
+		return normalized, nil
+	default:
+		return "", ErrInvalidStatus
+	}
 }

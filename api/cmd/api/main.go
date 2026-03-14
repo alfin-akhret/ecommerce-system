@@ -38,6 +38,12 @@ func main() {
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
 	r.With(auth.AuthMiddleware).Post("/checkout", helper.Handle(application.OrderHandler.Checkout))
 
+	r.Route("/payments", func(r chi.Router) {
+		r.With(auth.AuthMiddleware).Post("/", helper.Handle(application.PaymentHandler.CreatePayment))
+		r.With(auth.AuthMiddleware).Get("/", helper.Handle(application.PaymentHandler.GetPayment))
+		r.With(auth.AuthMiddleware).Post("/status", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
+	})
+
 	r.Route("/products", func(r chi.Router) {
 		r.Get("/", helper.Handle(application.ProductHandler.ListProducts))
 		r.Get("/{id}", helper.Handle(application.ProductHandler.GetProduct))
