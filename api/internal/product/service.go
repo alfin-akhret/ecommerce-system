@@ -77,14 +77,14 @@ func (s *Service) UpdateStock(ctx context.Context, productID string, qty int) er
 	return s.repo.UpdateStock(ctx, productID, qty)
 }
 
-func (s *Service) ReserveInventory(ctx context.Context, productID string, qty int) error {
+func (s *Service) ReserveStock(ctx context.Context, productID string, qty int) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback(ctx)
 
-	if err := s.ReserveInventoryWithTx(ctx, tx, productID, qty); err != nil {
+	if err := s.ReserveStockWithTx(ctx, tx, productID, qty); err != nil {
 		return err
 	}
 
@@ -92,7 +92,7 @@ func (s *Service) ReserveInventory(ctx context.Context, productID string, qty in
 
 }
 
-func (s *Service) ReserveInventoryWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
 	repo := s.repo.WithTx(tx)
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
 	if err != nil {
@@ -112,7 +112,7 @@ func (s *Service) ReserveInventoryWithTx(ctx context.Context, tx pgx.Tx, product
 	return nil
 }
 
-func (s *Service) ReleaseInventory(ctx context.Context, productID string, qty int) error {
+func (s *Service) ReleaseStock(ctx context.Context, productID string, qty int) error {
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
 		return err
@@ -138,7 +138,7 @@ func (s *Service) ReleaseInventory(ctx context.Context, productID string, qty in
 
 }
 
-func (s *Service) ConfirmInventory(ctx context.Context, productID string, qty int) error {
+func (s *Service) ConfirmStock(ctx context.Context, productID string, qty int) error {
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
