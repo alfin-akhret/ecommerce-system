@@ -119,7 +119,16 @@ func (s *Service) ReleaseStock(ctx context.Context, productID string, qty int) e
 	}
 	defer tx.Rollback(ctx)
 
-	repo := NewProductRepository(tx)
+	if err := s.ReleaseStockWithTx(ctx, tx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+
+}
+
+func (s *Service) ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	repo := s.repo.WithTx(tx)
 
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
 	if err != nil {
@@ -134,8 +143,7 @@ func (s *Service) ReleaseStock(ctx context.Context, productID string, qty int) e
 		return err
 	}
 
-	return tx.Commit(ctx)
-
+	return nil
 }
 
 func (s *Service) ConfirmStock(ctx context.Context, productID string, qty int) error {
@@ -146,7 +154,15 @@ func (s *Service) ConfirmStock(ctx context.Context, productID string, qty int) e
 	}
 	defer tx.Rollback(ctx)
 
-	repo := NewProductRepository(tx)
+	if err := s.ConfirmStockWithTx(ctx, tx, productID, qty); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Service) ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	repo := s.repo.WithTx(tx)
 
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
 	if err != nil {
@@ -161,5 +177,5 @@ func (s *Service) ConfirmStock(ctx context.Context, productID string, qty int) e
 		return err
 	}
 
-	return tx.Commit(ctx)
+	return nil
 }
