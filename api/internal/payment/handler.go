@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"github.com/go-chi/chi"
 )
 
 type Handler struct {
@@ -41,7 +42,7 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) er
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	paymentID := r.URL.Query().Get("payment_id")
+	paymentID := chi.URLParam(r, "payment_id")
 	if paymentID == "" {
 		return helper.NewHTTPError(http.StatusBadRequest, "payment_id required")
 	}
@@ -60,7 +61,7 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) er
 
 // GetPayment endpoint
 func (h *Handler) GetPayment(w http.ResponseWriter, r *http.Request) error {
-	paymentID := r.URL.Query().Get("payment_id")
+	paymentID := chi.URLParam(r, "payment_id")
 	if paymentID == "" {
 		return helper.NewHTTPError(http.StatusBadRequest, "payment_id required")
 	}

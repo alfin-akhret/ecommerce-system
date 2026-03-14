@@ -40,8 +40,8 @@ func main() {
 
 	r.Route("/payments", func(r chi.Router) {
 		r.With(auth.AuthMiddleware).Post("/", helper.Handle(application.PaymentHandler.CreatePayment))
-		r.With(auth.AuthMiddleware).Get("/", helper.Handle(application.PaymentHandler.GetPayment))
-		r.With(auth.AuthMiddleware).Post("/status", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
+		r.With(auth.AuthMiddleware).Get("/{payment_id}", helper.Handle(application.PaymentHandler.GetPayment))
+		r.With(auth.AuthMiddleware).Post("/{payment_id}/status", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
 	})
 
 	r.Route("/products", func(r chi.Router) {
