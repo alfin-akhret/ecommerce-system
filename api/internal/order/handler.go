@@ -1,6 +1,7 @@
 package order
 
 import (
+	"encoding/json"
 	"errors"
 	"net/http"
 
@@ -75,5 +76,25 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	helper.WriteSuccess(w, http.StatusOK, orders)
+	return nil
+}
+
+func (h *Handler) Checkout(w http.ResponseWriter, r *http.Request) error {
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
+	}
+
+	var req CheckoutRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	resp, err := h.service.Checkout(r.Context(), userID, req)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, resp)
 	return nil
 }

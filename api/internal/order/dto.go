@@ -6,7 +6,7 @@ type CreateOrderRequest struct {
 
 type OrderItemRequest struct {
 	ProductID string `json:"product_id"`
-	Qty       int    `json:"qty"`
+	Qty       int    `json:"quantity"`
 }
 
 type OrderListItem struct {
@@ -20,7 +20,7 @@ type OrderItemResponse struct {
 	ID        string  `json:"id"`
 	ProductID string  `json:"product_id"`
 	Price     float64 `json:"price"`
-	Qty       int     `json:"qty"`
+	Qty       int     `json:"quantity"`
 }
 
 type OrderResponse struct {
@@ -30,4 +30,18 @@ type OrderResponse struct {
 	TotalAmount float64             `json:"total_amount"`
 	CreatedAt   string              `json:"created_at"`
 	Items       []OrderItemResponse `json:"items"`
+}
+
+type CheckoutItem struct {
+	ProductID string `json:"product_id"`
+	Quantity  int    `json:"quantity"`
+}
+
+type CheckoutRequest struct {
+	Items []CheckoutItem `json:"items"`
+}
+
+type CheckoutResponse struct {
+	OrderID     string  `json:"order_id"`
+	TotalAmount float64 `json:"total_amount"`
 }

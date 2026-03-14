@@ -88,7 +88,7 @@ func (h *Handler) ReserveStock(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	err := h.service.ReserveInventory(r.Context(), id, req.Qty)
+	err := h.service.ReserveStock(r.Context(), id, req.Qty)
 	if err != nil {
 		if errors.Is(err, ErrNotEnoughStock) {
 			return helper.NewHTTPError(400, err.Error())
@@ -111,7 +111,7 @@ func (h *Handler) ReleaseStock(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	err := h.service.ReleaseInventory(r.Context(), id, req.Qty)
+	err := h.service.ReleaseStock(r.Context(), id, req.Qty)
 	if err != nil {
 		return err
 	}
@@ -130,7 +130,7 @@ func (h *Handler) ConfirmStock(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	err := h.service.ConfirmInventory(r.Context(), id, req.Qty)
+	err := h.service.ConfirmStock(r.Context(), id, req.Qty)
 	if err != nil {
 		return err
 	}

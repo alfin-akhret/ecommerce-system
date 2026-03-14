@@ -22,3 +22,6 @@ postgres_data/
 
 # vendor
 vendor/
+
+# local docs
+*.pages

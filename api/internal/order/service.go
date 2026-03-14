@@ -15,17 +15,19 @@ var ErrInvalidQty = errors.New("invalid quantity")
 var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
-	db   *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
-	repo *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
+	db             *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
+	repo           *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
+	productService *product.Service
 }
 
-func NewService(db *pgxpool.Pool) *Service {
+func NewService(db *pgxpool.Pool, productService *product.Service) *Service {
 
 	repo := NewOrderRepository(db)
 
 	return &Service{
-		db:   db,
-		repo: repo,
+		db:             db,
+		repo:           repo,
+		productService: productService,
 	}
 }
 
@@ -37,7 +39,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	defer tx.Rollback(ctx)
 
 	orderRepo := NewOrderRepository(tx)
-	productRepo := product.NewProductRepository(tx)
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
@@ -47,7 +48,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	order := &Order{
 		ID:     uuid.New(),
 		UserID: userUUID,
-		Status: "pending_payment",
+		Status: "PENDING_PAYMENT",
 	}
 
 	var (
@@ -61,23 +62,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		}
 
 		// get products
-		p, err := productRepo.GetProductByID(ctx, item.ProductID)
+		p, err := s.productService.GetProductByIDWithTx(ctx, tx, item.ProductID)
 		if err != nil {
 			return err
-		}
-
-		inv, err := productRepo.GetInventoryForUpdate(ctx, item.ProductID)
-		if err != nil {
-			return err
-		}
-
-		available := inv.Stock - inv.Reserved
-		if available < item.Qty {
-			return product.ErrNotEnoughStock
 		}
 
 		// reserve stock
-		if err := productRepo.UpdateReserved(ctx, item.ProductID, item.Qty); err != nil {
+		if err := s.productService.ReserveStockWithTx(ctx, tx, item.ProductID, item.Qty); err != nil {
 			return err
 		}
 
@@ -164,5 +155,85 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 		TotalAmount: order.TotalAmount,
 		CreatedAt:   order.CreatedAt.Format(time.RFC3339),
 		Items:       items,
+	}, nil
+}
+
+func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutRequest) (*CheckoutResponse, error) {
+	// begin transaction
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// create orderRepo with transaction
+	orderRepo := s.repo.WithTx(tx)
+
+	// parse userID
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// create new order object
+	order := &Order{
+		ID:     uuid.New(),
+		UserID: userUUID,
+		Status: "PENDING",
+	}
+
+	var total float64
+	var orderItems []*OrderItem
+
+	for _, item := range req.Items {
+		product, err := s.productService.GetProductByIDWithTx(ctx, tx, item.ProductID)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := s.productService.ReserveStockWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
+			return nil, err
+		}
+
+		itemQty := item.Quantity
+		subtotal := product.Price * float64(itemQty)
+		total += subtotal
+
+		// parse product ID
+		productUUID, err := uuid.Parse(product.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		OrderItem := &OrderItem{
+			ID:        uuid.New(),
+			OrderID:   order.ID,
+			ProductID: productUUID,
+			Price:     product.Price,
+			Qty:       itemQty,
+		}
+
+		orderItems = append(orderItems, OrderItem)
+	}
+
+	order.TotalAmount = total
+
+	if err := orderRepo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	for _, orderItem := range orderItems {
+		if err := orderRepo.CreateOrderItem(ctx, orderItem); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &CheckoutResponse{
+		OrderID:     order.ID.String(),
+		TotalAmount: total,
 	}, nil
 }
