@@ -68,7 +68,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		}
 
 		// reserve stock
-		if err := s.productService.ReserveInventoryWithTx(ctx, tx, item.ProductID, item.Qty); err != nil {
+		if err := s.productService.ReserveStockWithTx(ctx, tx, item.ProductID, item.Qty); err != nil {
 			return err
 		}
 
@@ -191,7 +191,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 			return nil, err
 		}
 
-		if err := s.productService.ReserveInventoryWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
+		if err := s.productService.ReserveStockWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
 			return nil, err
 		}
 
