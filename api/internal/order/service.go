@@ -47,7 +47,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	order := &Order{
 		ID:     uuid.New(),
 		UserID: userUUID,
-		Status: "pending_payment",
+		Status: "PENDING_PAYMENT",
 	}
 
 	var (
@@ -164,5 +164,84 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 		TotalAmount: order.TotalAmount,
 		CreatedAt:   order.CreatedAt.Format(time.RFC3339),
 		Items:       items,
+	}, nil
+}
+
+func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutRequest) (*CheckoutResponse, error) {
+	// begin transaction
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	// create orderRepo with transaction
+	orderRepo := s.repo.WithTx(tx)
+
+	// parse userID
+	userUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// create new order object
+	order := &Order{
+		ID:     uuid.New(),
+		UserID: userUUID,
+		Status: "PENDING",
+	}
+
+	var total float64
+	var orderItems []*OrderItem
+
+	// create new product repo
+	productRepo := product.NewProductRepository(tx)
+
+	for _, item := range req.Items {
+		product, err := productRepo.GetProductByID(ctx, item.ProductID)
+		if err != nil {
+			return nil, err
+		}
+
+		itemQty := item.Quantity
+		subtotal := product.Price * float64(itemQty)
+		total += subtotal
+
+		// parse product ID
+		productUUID, err := uuid.Parse(product.ID)
+		if err != nil {
+			return nil, err
+		}
+
+		OrderItem := &OrderItem{
+			ID:        uuid.New(),
+			OrderID:   order.ID,
+			ProductID: productUUID,
+			Price:     product.Price,
+			Qty:       itemQty,
+		}
+
+		orderItems = append(orderItems, OrderItem)
+	}
+
+	order.TotalAmount = total
+
+	if err := orderRepo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	for _, orderItem := range orderItems {
+		if err := orderRepo.CreateOrderItem(ctx, orderItem); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	return &CheckoutResponse{
+		OrderID:     order.ID.String(),
+		TotalAmount: total,
 	}, nil
 }

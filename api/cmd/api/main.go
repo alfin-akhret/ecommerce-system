@@ -36,6 +36,7 @@ func main() {
 	r.With(auth.AuthMiddleware).Post("/orders", helper.Handle(application.OrderHandler.CreateOrder))
 	r.With(auth.AuthMiddleware).Get("/orders", helper.Handle(application.OrderHandler.ListOrders))
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
+	r.With(auth.AuthMiddleware).Post("/checkout", helper.Handle(application.OrderHandler.Checkout))
 
 	r.Route("/products", func(r chi.Router) {
 		r.Get("/", helper.Handle(application.ProductHandler.ListProducts))
