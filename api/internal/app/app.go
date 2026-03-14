@@ -39,7 +39,7 @@ func New() (*App, error) {
 	productHandler := product.NewHandler(productService)
 
 	// order
-	orderService := order.NewService(db)
+	orderService := order.NewService(db, productService)
 	orderHandler := order.NewHandler(orderService)
 
 	return &App{

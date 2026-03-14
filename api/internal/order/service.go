@@ -15,17 +15,19 @@ var ErrInvalidQty = errors.New("invalid quantity")
 var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
-	db   *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
-	repo *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
+	db             *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
+	repo           *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
+	productService *product.Service
 }
 
-func NewService(db *pgxpool.Pool) *Service {
+func NewService(db *pgxpool.Pool, productService *product.Service) *Service {
 
 	repo := NewOrderRepository(db)
 
 	return &Service{
-		db:   db,
-		repo: repo,
+		db:             db,
+		repo:           repo,
+		productService: productService,
 	}
 }
 
@@ -37,7 +39,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	defer tx.Rollback(ctx)
 
 	orderRepo := NewOrderRepository(tx)
-	productRepo := product.NewProductRepository(tx)
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
@@ -61,23 +62,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		}
 
 		// get products
-		p, err := productRepo.GetProductByID(ctx, item.ProductID)
+		p, err := s.productService.GetProductByIDWithTx(ctx, tx, item.ProductID)
 		if err != nil {
 			return err
-		}
-
-		inv, err := productRepo.GetInventoryForUpdate(ctx, item.ProductID)
-		if err != nil {
-			return err
-		}
-
-		available := inv.Stock - inv.Reserved
-		if available < item.Qty {
-			return product.ErrNotEnoughStock
 		}
 
 		// reserve stock
-		if err := productRepo.UpdateReserved(ctx, item.ProductID, item.Qty); err != nil {
+		if err := s.productService.ReserveInventoryWithTx(ctx, tx, item.ProductID, item.Qty); err != nil {
 			return err
 		}
 
@@ -194,12 +185,13 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 	var total float64
 	var orderItems []*OrderItem
 
-	// create new product repo
-	productRepo := product.NewProductRepository(tx)
-
 	for _, item := range req.Items {
-		product, err := productRepo.GetProductByID(ctx, item.ProductID)
+		product, err := s.productService.GetProductByIDWithTx(ctx, tx, item.ProductID)
 		if err != nil {
+			return nil, err
+		}
+
+		if err := s.productService.ReserveInventoryWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
 			return nil, err
 		}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -67,6 +68,11 @@ func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetail
 	return s.repo.GetProductByID(ctx, id)
 }
 
+func (s *Service) GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, id string) (*ProductDetailResponse, error) {
+	repo := s.repo.WithTx(tx)
+	return repo.GetProductByID(ctx, id)
+}
+
 func (s *Service) UpdateStock(ctx context.Context, productID string, qty int) error {
 	return s.repo.UpdateStock(ctx, productID, qty)
 }
@@ -78,8 +84,16 @@ func (s *Service) ReserveInventory(ctx context.Context, productID string, qty in
 	}
 	defer tx.Rollback(ctx)
 
-	repo := NewProductRepository(tx)
+	if err := s.ReserveInventoryWithTx(ctx, tx, productID, qty); err != nil {
+		return err
+	}
 
+	return tx.Commit(ctx)
+
+}
+
+func (s *Service) ReserveInventoryWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	repo := s.repo.WithTx(tx)
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
 	if err != nil {
 		return err
@@ -95,8 +109,7 @@ func (s *Service) ReserveInventory(ctx context.Context, productID string, qty in
 		return err
 	}
 
-	return tx.Commit(ctx)
-
+	return nil
 }
 
 func (s *Service) ReleaseInventory(ctx context.Context, productID string, qty int) error {
