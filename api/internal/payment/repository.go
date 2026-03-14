@@ -33,15 +33,15 @@ func (r *Repository) CreatePayment(ctx context.Context, p *Payment) error {
 		p.Status,
 		p.PaymentMethod,
 		p.PaidAt,
-		time.Now(),
-		time.Now(),
+		p.CreatedAt,
+		p.UpdatedAt,
 	)
 
 	return err
 }
 
 // update payment status, optionally set PaidAt
-func (r *Repository) UpdateStatus(ctx context.Context, paymentID string, status string, paidAt *time.time) error {
+func (r *Repository) UpdateStatus(ctx context.Context, paymentID string, status string, paidAt *time.Time) error {
 	query := `
 	UPDATE payments
 	SET status = $1, paid_at = $2, updated_at = now()
@@ -64,6 +64,7 @@ func (r *Repository) GetByID(ctx context.Context, paymentID string) (*Payment, e
 	err := r.db.QueryRow(ctx, query, paymentID).Scan(
 		&p.ID,
 		&p.OrderID,
+		&p.Amount,
 		&p.Status,
 		&p.PaymentMethod,
 		&p.PaidAt,
