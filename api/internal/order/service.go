@@ -12,104 +12,35 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-var ErrInvalidQty = errors.New("invalid quantity")
 var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
 	db             *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
 	repo           *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
-	productService *product.Service
-	paymentService *payment.Service
+	productUpdater ProductUpdater
+	paymentCreator PaymentCreator
 }
 
-func NewService(db *pgxpool.Pool, productService *product.Service, paymentService *payment.Service) *Service {
+type ProductUpdater interface {
+	GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, productID string) (*product.Product, error)
+	ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
+	ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
+}
+
+type PaymentCreator interface {
+	CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, method string) (*payment.CreatePaymentResponse, error)
+}
+
+func NewService(db *pgxpool.Pool, productUpdater ProductUpdater, paymentCreator PaymentCreator) *Service {
 
 	repo := NewOrderRepository(db)
 
 	return &Service{
 		db:             db,
 		repo:           repo,
-		productService: productService,
-		paymentService: paymentService,
+		productUpdater: productUpdater,
+		paymentCreator: paymentCreator,
 	}
-}
-
-func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) error {
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback(ctx)
-
-	orderRepo := s.repo.WithTx(tx)
-
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		return err
-	}
-
-	order := &Order{
-		ID:     uuid.New(),
-		UserID: userUUID,
-		Status: "PENDING_PAYMENT",
-	}
-
-	var (
-		total      float64
-		orderItems []*OrderItem
-	)
-
-	for _, item := range req.Items {
-		if item.Qty <= 0 {
-			return ErrInvalidQty
-		}
-
-		// get products
-		p, err := s.productService.GetProductByIDWithTx(ctx, tx, item.ProductID)
-		if err != nil {
-			return err
-		}
-
-		// reserve stock
-		if err := s.productService.ReserveStockWithTx(ctx, tx, item.ProductID, item.Qty); err != nil {
-			return err
-		}
-
-		productUUID, err := uuid.Parse(p.ID)
-		if err != nil {
-			return err
-		}
-
-		orderItem := &OrderItem{
-			ID:        uuid.New(),
-			OrderID:   order.ID,
-			ProductID: productUUID,
-			Price:     p.Price,
-			Qty:       item.Qty,
-		}
-
-		orderItems = append(orderItems, orderItem)
-		total += p.Price * float64(item.Qty)
-	}
-
-	order.TotalAmount = total
-
-	if err := orderRepo.CreateOrder(ctx, order); err != nil {
-		return err
-	}
-
-	for _, orderItem := range orderItems {
-		if err := orderRepo.CreateOrderItem(ctx, orderItem); err != nil {
-			return err
-		}
-	}
-
-	if _, err := s.paymentService.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod); err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-
 }
 
 func (s *Service) ListOrders(ctx context.Context, userID string) ([]OrderListItem, error) {
@@ -193,12 +124,12 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 	var orderItems []*OrderItem
 
 	for _, item := range req.Items {
-		product, err := s.productService.GetProductByIDWithTx(ctx, tx, item.ProductID)
+		product, err := s.productUpdater.GetProductByIDWithTx(ctx, tx, item.ProductID)
 		if err != nil {
 			return nil, err
 		}
 
-		if err := s.productService.ReserveStockWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
+		if err := s.productUpdater.ReserveStockWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
 			return nil, err
 		}
 
@@ -207,15 +138,10 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		total += subtotal
 
 		// parse product ID
-		productUUID, err := uuid.Parse(product.ID)
-		if err != nil {
-			return nil, err
-		}
-
 		OrderItem := &OrderItem{
 			ID:        uuid.New(),
 			OrderID:   order.ID,
-			ProductID: productUUID,
+			ProductID: product.ID,
 			Price:     product.Price,
 			Qty:       itemQty,
 		}
@@ -226,6 +152,10 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 	order.TotalAmount = total
 
 	if err := orderRepo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	if _, err := s.paymentCreator.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod); err != nil {
 		return nil, err
 	}
 
@@ -243,4 +173,28 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		OrderID:     order.ID.String(),
 		TotalAmount: total,
 	}, nil
+}
+
+func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
+	repo := s.repo.WithTx(tx)
+	return repo.UpdateOrderStatus(ctx, orderID, status)
+}
+
+func (s *Service) UpdateStatus(ctx context.Context, orderID string, status string) error {
+	return s.repo.UpdateOrderStatus(ctx, orderID, status)
+}
+
+func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+	items, err := s.repo.ListOrderItems(ctx, orderID)
+	if err != nil {
+		return err
+	}
+
+	for _, item := range items {
+		if err := s.productUpdater.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

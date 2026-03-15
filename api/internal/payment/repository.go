@@ -2,11 +2,14 @@ package payment
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
 	"github.com/jackc/pgx/v5"
 )
+
+var ErrPaymentNotFound = errors.New("payment not found")
 
 type Repository struct {
 	db database.DBTX
@@ -48,8 +51,16 @@ func (r *Repository) UpdateStatus(ctx context.Context, paymentID string, status 
 	WHERE id = $3
 	`
 
-	_, err := r.db.Exec(ctx, query, status, paidAt, paymentID)
-	return err
+	cmd, err := r.db.Exec(ctx, query, status, paidAt, paymentID)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrPaymentNotFound
+	}
+
+	return nil
 }
 
 // get payment by id
@@ -72,6 +83,9 @@ func (r *Repository) GetByID(ctx context.Context, paymentID string) (*Payment, e
 		&p.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPaymentNotFound
+		}
 		return nil, err
 	}
 
@@ -97,6 +111,9 @@ func (r *Repository) GetByOrderID(ctx context.Context, orderID string) (*Payment
 		&p.UpdatedAt,
 	)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPaymentNotFound
+		}
 		return nil, err
 	}
 	return &p, nil

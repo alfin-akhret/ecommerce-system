@@ -26,14 +26,12 @@ func main() {
 		}
 	})
 
-	r.Post("/users", helper.Handle(application.UserHandler.CreateUser))
 	r.Get("/users/{id}", helper.Handle(application.UserHandler.GetUser))
 	r.Post("/register", helper.Handle(application.UserHandler.Register))
 	r.Post("/login", helper.Handle(application.AuthHandler.Login))
 
 	// protected: khusus user
 	r.With(auth.AuthMiddleware).Get("/me", helper.Handle(application.AuthHandler.Me))
-	r.With(auth.AuthMiddleware).Post("/orders", helper.Handle(application.OrderHandler.CreateOrder))
 	r.With(auth.AuthMiddleware).Get("/orders", helper.Handle(application.OrderHandler.ListOrders))
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
 	r.With(auth.AuthMiddleware).Post("/checkout", helper.Handle(application.OrderHandler.Checkout))
@@ -41,7 +39,7 @@ func main() {
 	r.Route("/payments", func(r chi.Router) {
 		r.With(auth.AuthMiddleware).Post("/", helper.Handle(application.PaymentHandler.CreatePayment))
 		r.With(auth.AuthMiddleware).Get("/{payment_id}", helper.Handle(application.PaymentHandler.GetPayment))
-		r.With(auth.AuthMiddleware).Post("/{payment_id}/status", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
+		r.With(auth.AuthMiddleware).Patch("/{payment_id}", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
 	})
 
 	r.Route("/products", func(r chi.Router) {
@@ -49,6 +47,7 @@ func main() {
 		r.Get("/{id}", helper.Handle(application.ProductHandler.GetProduct))
 
 		// protected: khusus admin/internal
+		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/users", helper.Handle(application.UserHandler.CreateUser))
 		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/", helper.Handle(application.ProductHandler.CreateProduct))
 		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Patch("/{id}/stock", helper.Handle(application.ProductHandler.UpdateStock))
 		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/{id}/reserve", helper.Handle(application.ProductHandler.ReserveStock))

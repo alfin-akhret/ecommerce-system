@@ -1,15 +1,5 @@
 package order
 
-type CreateOrderRequest struct {
-	Items         []OrderItemRequest `json:"items"`
-	PaymentMethod string             `json:"payment_method"`
-}
-
-type OrderItemRequest struct {
-	ProductID string `json:"product_id"`
-	Qty       int    `json:"quantity"`
-}
-
 type OrderListItem struct {
 	ID          string  `json:"id"`
 	Status      string  `json:"status"`
@@ -39,7 +29,8 @@ type CheckoutItem struct {
 }
 
 type CheckoutRequest struct {
-	Items []CheckoutItem `json:"items"`
+	Items         []CheckoutItem `json:"items"`
+	PaymentMethod string         `json:"payment_method"`
 }
 
 type CheckoutResponse struct {

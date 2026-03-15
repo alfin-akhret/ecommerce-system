@@ -47,6 +47,8 @@ func New() (*App, error) {
 	orderService := order.NewService(db, productService, paymentService)
 	orderHandler := order.NewHandler(orderService)
 
+	paymentService.SetOrderStatusUpdater(orderService)
+
 	paymentHandler := payment.NewHandler(paymentService)
 
 	return &App{

@@ -109,6 +109,25 @@ func (r *Repository) GetOrderByID(ctx context.Context, userID string, orderID st
 	return &o, nil
 }
 
+func (r *Repository) UpdateOrderStatus(ctx context.Context, orderID string, status string) error {
+	query := `
+	UPDATE orders
+	SET status = $1
+	WHERE id = $2
+	`
+
+	cmd, err := r.db.Exec(ctx, query, status, orderID)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrOrderNotFound
+	}
+
+	return nil
+}
+
 func (r *Repository) ListOrderItems(ctx context.Context, orderID string) ([]OrderItem, error) {
 	query := `
 	SELECT id, order_id, product_id, price, quantity, created_at

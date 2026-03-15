@@ -12,8 +12,14 @@ import (
 )
 
 type Service struct {
-	db   *pgxpool.Pool
-	repo *Repository
+	db                 *pgxpool.Pool
+	repo               *Repository
+	orderStatusUpdater OrderUpdater
+}
+
+type OrderUpdater interface {
+	UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error
+	ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error
 }
 
 const (
@@ -26,12 +32,17 @@ const (
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
 var ErrInvalidStatus = errors.New("invalid payment status")
+var ErrOrderStatusUpdaterNotSet = errors.New("order status updater is not configured")
 
 func NewService(db *pgxpool.Pool) *Service {
 	return &Service{
 		db:   db,
 		repo: NewRepository(db),
 	}
+}
+
+func (s *Service) SetOrderStatusUpdater(updater OrderUpdater) {
+	s.orderStatusUpdater = updater
 }
 
 // Create payment (return DTO with payment URL)
@@ -70,14 +81,14 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		return nil, ErrInvalidPaymentMethod
 	}
 
-	paymentID := uuid.New().String()
+	paymentID := uuid.New()
 	now := time.Now()
 	orderUUID, err := uuid.Parse(orderID)
 	if err != nil {
 		return nil, err
 	}
 	p := &Payment{
-		ID:            uuid.MustParse(paymentID),
+		ID:            paymentID,
 		OrderID:       orderUUID,
 		Amount:        amount,
 		Status:        StatusPending,
@@ -90,10 +101,10 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		return nil, err
 	}
 
-	paymentURL := "localhost:8080/payment-gateway/pay" + paymentID
+	paymentURL := "localhost:8080/payment-gateway/pay/" + paymentID.String()
 
 	return &CreatePaymentResponse{
-		ID:            paymentID,
+		ID:            paymentID.String(),
 		OrderID:       orderID,
 		Status:        p.Status,
 		Amount:        amount,
@@ -136,4 +147,43 @@ func normalizeStatus(status string) (string, error) {
 	default:
 		return "", ErrInvalidStatus
 	}
+}
+
+func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) error {
+	if s.orderStatusUpdater == nil {
+		return ErrOrderStatusUpdaterNotSet
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	paymentRepo := s.repo.WithTx(tx)
+
+	payment, err := paymentRepo.GetByID(ctx, paymentID)
+	if err != nil {
+		return err
+	}
+
+	if payment.Status != StatusPending {
+		return ErrInvalidStatus
+	}
+
+	now := time.Now()
+
+	if err := paymentRepo.UpdateStatus(ctx, paymentID, StatusSuccess, &now); err != nil {
+		return err
+	}
+
+	if err := s.orderStatusUpdater.ConfirmOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+		return err
+	}
+
+	if err := s.orderStatusUpdater.UpdateOrderStatusWithTx(ctx, tx, payment.OrderID.String(), "PAID"); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
 }
