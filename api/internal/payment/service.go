@@ -20,6 +20,7 @@ type Service struct {
 type OrderUpdater interface {
 	UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error
 	ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error
+	ReleaseOrderStockWithTransaction(ctx context.Context, tx pgx.Tx, orderID string) error
 }
 
 const (

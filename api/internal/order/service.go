@@ -24,6 +24,7 @@ type Service struct {
 type ProductUpdater interface {
 	GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, productID string) (*product.Product, error)
 	ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
+	ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
 	ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
 }
 
@@ -196,5 +197,26 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 		}
 	}
 
+	return nil
+}
+
+func (s *Service) ReleaseOrderStockWithTransaction(ctx context.Context, tx pgx.Tx, orderID string) error {
+	repo := s.repo.WithTx(tx)
+
+	items, err := repo.ListOrderItems(ctx, orderID)
+	if err != nil {
+		return err
+	}
+
+	for _, item := range items {
+		if err := s.productUpdater.ReleaseStockWithTx(
+			ctx,
+			tx,
+			item.ProductID.String(),
+			item.Qty,
+		); err != nil {
+			return err
+		}
+	}
 	return nil
 }
