@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/payment"
 	"github.com/alfin-akhret/ecommerce-system/internal/product"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -18,9 +19,10 @@ type Service struct {
 	db             *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
 	repo           *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
 	productService *product.Service
+	paymentService *payment.Service
 }
 
-func NewService(db *pgxpool.Pool, productService *product.Service) *Service {
+func NewService(db *pgxpool.Pool, productService *product.Service, paymentService *payment.Service) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -28,6 +30,7 @@ func NewService(db *pgxpool.Pool, productService *product.Service) *Service {
 		db:             db,
 		repo:           repo,
 		productService: productService,
+		paymentService: paymentService,
 	}
 }
 
@@ -38,7 +41,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 	defer tx.Rollback(ctx)
 
-	orderRepo := NewOrderRepository(tx)
+	orderRepo := s.repo.WithTx(tx)
 
 	userUUID, err := uuid.Parse(userID)
 	if err != nil {
@@ -99,6 +102,10 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		if err := orderRepo.CreateOrderItem(ctx, orderItem); err != nil {
 			return err
 		}
+	}
+
+	if _, err := s.paymentService.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod); err != nil {
+		return err
 	}
 
 	return tx.Commit(ctx)

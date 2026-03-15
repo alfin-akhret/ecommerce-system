@@ -40,12 +40,13 @@ func New() (*App, error) {
 	productService := product.NewService(db)
 	productHandler := product.NewHandler(productService)
 
-	// order
-	orderService := order.NewService(db, productService)
-	orderHandler := order.NewHandler(orderService)
-
 	// payment
 	paymentService := payment.NewService(db)
+
+	// order
+	orderService := order.NewService(db, productService, paymentService)
+	orderHandler := order.NewHandler(orderService)
+
 	paymentHandler := payment.NewHandler(paymentService)
 
 	return &App{

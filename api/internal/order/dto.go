@@ -1,7 +1,8 @@
 package order
 
 type CreateOrderRequest struct {
-	Items []OrderItemRequest `json:"items"`
+	Items         []OrderItemRequest `json:"items"`
+	PaymentMethod string             `json:"payment_method"`
 }
 
 type OrderItemRequest struct {
