@@ -5,8 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/alfin-akhret/ecommerce-system/internal/payment"
-	"github.com/alfin-akhret/ecommerce-system/internal/product"
+	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -17,22 +16,11 @@ var ErrOrderNotFound = errors.New("order not found")
 type Service struct {
 	db             *pgxpool.Pool
 	repo           *Repository
-	productUpdater ProductUpdater
-	paymentCreator PaymentCreator
+	productUpdater contracts.ProductUpdater
+	paymentUpdater contracts.PaymentUpdater
 }
 
-type ProductUpdater interface {
-	GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, productID string) (*product.Product, error)
-	ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
-	ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
-	ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
-}
-
-type PaymentCreator interface {
-	CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, method string) (*payment.CreatePaymentResponse, error)
-}
-
-func NewService(db *pgxpool.Pool, productUpdater ProductUpdater, paymentCreator PaymentCreator) *Service {
+func NewService(db *pgxpool.Pool, productUpdater contracts.ProductUpdater, paymentUpdater contracts.PaymentUpdater) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -40,7 +28,7 @@ func NewService(db *pgxpool.Pool, productUpdater ProductUpdater, paymentCreator 
 		db:             db,
 		repo:           repo,
 		productUpdater: productUpdater,
-		paymentCreator: paymentCreator,
+		paymentUpdater: paymentUpdater,
 	}
 }
 
@@ -135,15 +123,15 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		}
 
 		itemQty := item.Quantity
-		subtotal := product.Price * float64(itemQty)
+		subtotal := product.GetPrice() * float64(itemQty)
 		total += subtotal
 
 		// parse product ID
 		OrderItem := &OrderItem{
 			ID:        uuid.New(),
 			OrderID:   order.ID,
-			ProductID: product.ID,
-			Price:     product.Price,
+			ProductID: product.GetID(),
+			Price:     product.GetPrice(),
 			Qty:       itemQty,
 		}
 
@@ -156,7 +144,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		return nil, err
 	}
 
-	paymentResp, err := s.paymentCreator.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod)
+	paymentResp, err := s.paymentUpdater.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod)
 	if err != nil {
 		return nil, err
 	}

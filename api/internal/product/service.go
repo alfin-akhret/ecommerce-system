@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -69,7 +70,7 @@ func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetail
 	return s.repo.GetProductByID(ctx, id)
 }
 
-func (s *Service) GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, id string) (*Product, error) {
+func (s *Service) GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, id string) (contracts.ProductView, error) {
 	repo := s.repo.WithTx(tx)
 	detail, err := repo.GetProductByID(ctx, id)
 	if err != nil {

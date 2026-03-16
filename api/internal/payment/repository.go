@@ -118,3 +118,38 @@ func (r *Repository) GetByOrderID(ctx context.Context, orderID string) (*Payment
 	}
 	return &p, nil
 }
+
+func (r *Repository) FindExpiredPayment(ctx context.Context) ([]Payment, error) {
+	query := `
+		SELECT *
+		FROM payments
+		WHERE status = 'pending'
+		AND expired_at < NOW()
+	`
+	rows, err := r.db.Query(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []Payment
+	for rows.Next() {
+		var p Payment
+		if err := rows.Scan(
+			&p.ID,
+			&p.OrderID,
+			&p.Amount,
+			&p.Status,
+			&p.PaymentMethod,
+			&p.PaidAt,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+			&p.ExpiredAt,
+		); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+
+	return payments, rows.Err()
+}
