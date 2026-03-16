@@ -14,6 +14,8 @@ import (
 
 var ErrOrderNotFound = errors.New("order not found")
 
+const paymentURL string = "http://localhost:8081/pay?payment_id="
+
 type Service struct {
 	db             *pgxpool.Pool
 	repo           *Repository
@@ -174,7 +176,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 	return &CheckoutResponse{
 		OrderID:     order.ID.String(),
 		TotalAmount: total,
-		PaymentURL:  "localhost:8080/payment-gateway/pay/" + paymentResp.ID,
+		PaymentURL:  paymentURL + paymentResp.ID,
 	}, nil
 }
 
