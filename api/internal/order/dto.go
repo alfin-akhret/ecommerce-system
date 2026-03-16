@@ -36,4 +36,5 @@ type CheckoutRequest struct {
 type CheckoutResponse struct {
 	OrderID     string  `json:"order_id"`
 	TotalAmount float64 `json:"total_amount"`
+	PaymentURL  string  `json:"payment_url"`
 }

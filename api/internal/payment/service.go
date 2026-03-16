@@ -28,6 +28,7 @@ const (
 	StatusSuccess   = "SUCCESS"
 	StatusFailed    = "FAILED"
 	StatusCancelled = "CANCELLED"
+	StatusPaid      = "PAID"
 )
 
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
@@ -151,6 +152,41 @@ func normalizeStatus(status string) (string, error) {
 }
 
 func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) error {
+	return s.processPayment(ctx, paymentID, StatusSuccess, func(tx pgx.Tx, payment *Payment) error {
+		if err := s.orderStatusUpdater.ConfirmOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+			return err
+		}
+
+		return s.orderStatusUpdater.UpdateOrderStatusWithTx(
+			ctx,
+			tx,
+			payment.OrderID.String(),
+			StatusPaid,
+		)
+	})
+}
+
+func (s *Service) ProcessPaymentFailed(ctx context.Context, paymentID string) error {
+	return s.processPayment(ctx, paymentID, StatusFailed, func(tx pgx.Tx, payment *Payment) error {
+		if err := s.orderStatusUpdater.ReleaseOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+			return err
+		}
+
+		return s.orderStatusUpdater.UpdateOrderStatusWithTx(
+			ctx,
+			tx,
+			payment.OrderID.String(),
+			StatusCancelled,
+		)
+	})
+}
+
+func (s *Service) processPayment(
+	ctx context.Context,
+	paymentID string,
+	nextStatus string,
+	afterUpdate func(tx pgx.Tx, payment *Payment) error,
+) error {
 	if s.orderStatusUpdater == nil {
 		return ErrOrderStatusUpdaterNotSet
 	}
@@ -159,7 +195,6 @@ func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) e
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback(ctx)
 	defer tx.Rollback(ctx)
 
 	paymentRepo := s.repo.WithTx(tx)
@@ -173,64 +208,48 @@ func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) e
 		return ErrInvalidStatus
 	}
 
-	now := time.Now()
+	var paidAt *time.Time
+	if nextStatus == StatusSuccess {
+		now := time.Now()
+		paidAt = &now
+	}
 
-	if err := paymentRepo.UpdateStatus(ctx, paymentID, StatusSuccess, &now); err != nil {
+	if err := paymentRepo.UpdateStatus(ctx, paymentID, nextStatus, paidAt); err != nil {
 		return err
 	}
 
-	if err := s.orderStatusUpdater.ConfirmOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
-		return err
-	}
-
-	if err := s.orderStatusUpdater.UpdateOrderStatusWithTx(ctx, tx, payment.OrderID.String(), "PAID"); err != nil {
-		return err
+	if afterUpdate != nil {
+		if err := afterUpdate(tx, payment); err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit(ctx)
 }
 
-func (s *Service) ProcessPaymentFailed(ctx context.Context, paymentID string) error {
-	if s.orderStatusUpdater == nil {
-		return ErrOrderStatusUpdaterNotSet
-	}
+func (s *Service) HandleCallback(req PaymentCallbackRequest) error {
+	ctx := context.Background()
 
-	tx, err := s.db.Begin(ctx)
+	payment, err := s.repo.GetByID(ctx, req.PaymentID)
 	if err != nil {
 		return err
 	}
 
-	paymentRepo := s.repo.WithTx(tx)
+	if payment.Status == StatusSuccess || payment.Status == StatusFailed {
+		return nil
+	}
 
-	payment, err := paymentRepo.GetByID(ctx, paymentID)
+	status, err := normalizeStatus(req.Status)
 	if err != nil {
 		return err
 	}
 
-	if payment.Status != StatusPending {
+	switch status {
+	case StatusSuccess:
+		return s.ProcessPaymentSuccess(ctx, req.PaymentID)
+	case StatusFailed:
+		return s.ProcessPaymentFailed(ctx, req.PaymentID)
+	default:
 		return ErrInvalidStatus
 	}
-
-	if err := paymentRepo.UpdateStatus(ctx, paymentID, StatusFailed, nil); err != nil {
-		return err
-	}
-
-	if err := s.orderStatusUpdater.UpdateOrderStatusWithTx(
-		ctx,
-		tx,
-		payment.OrderID.String(),
-		StatusCancelled,
-	); err != nil {
-		return err
-	}
-
-	if err := s.orderStatusUpdater.ReleaseOrderStockWithTx(
-		ctx,
-		tx,
-		payment.OrderID.String(),
-	); err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
 }
