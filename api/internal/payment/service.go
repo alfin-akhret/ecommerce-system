@@ -20,7 +20,7 @@ type Service struct {
 type OrderUpdater interface {
 	UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error
 	ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error
-	ReleaseOrderStockWithTransaction(ctx context.Context, tx pgx.Tx, orderID string) error
+	ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error
 }
 
 const (
@@ -160,6 +160,7 @@ func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) e
 		return err
 	}
 	defer tx.Rollback(ctx)
+	defer tx.Rollback(ctx)
 
 	paymentRepo := s.repo.WithTx(tx)
 
@@ -183,6 +184,51 @@ func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) e
 	}
 
 	if err := s.orderStatusUpdater.UpdateOrderStatusWithTx(ctx, tx, payment.OrderID.String(), "PAID"); err != nil {
+		return err
+	}
+
+	return tx.Commit(ctx)
+}
+
+func (s *Service) ProcessPaymentFailed(ctx context.Context, paymentID string) error {
+	if s.orderStatusUpdater == nil {
+		return ErrOrderStatusUpdaterNotSet
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+
+	paymentRepo := s.repo.WithTx(tx)
+
+	payment, err := paymentRepo.GetByID(ctx, paymentID)
+	if err != nil {
+		return err
+	}
+
+	if payment.Status != StatusPending {
+		return ErrInvalidStatus
+	}
+
+	if err := paymentRepo.UpdateStatus(ctx, paymentID, StatusFailed, nil); err != nil {
+		return err
+	}
+
+	if err := s.orderStatusUpdater.UpdateOrderStatusWithTx(
+		ctx,
+		tx,
+		payment.OrderID.String(),
+		StatusCancelled,
+	); err != nil {
+		return err
+	}
+
+	if err := s.orderStatusUpdater.ReleaseOrderStockWithTx(
+		ctx,
+		tx,
+		payment.OrderID.String(),
+	); err != nil {
 		return err
 	}
 

@@ -47,6 +47,24 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) er
 		return helper.NewHTTPError(http.StatusBadRequest, "payment_id required")
 	}
 
+	if req.Status == StatusFailed {
+		if err := h.service.ProcessPaymentFailed(r.Context(), paymentID); err != nil {
+			if errors.Is(err, ErrInvalidStatus) {
+				return helper.NewHTTPError(http.StatusBadRequest, err.Error())
+			}
+			if errors.Is(err, ErrPaymentNotFound) {
+				return helper.NewHTTPError(http.StatusNotFound, err.Error())
+			}
+			if errors.Is(err, ErrOrderStatusUpdaterNotSet) {
+				return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+			return err
+		}
+
+		helper.WriteSuccess(w, http.StatusOK, "payment processed: "+StatusFailed)
+		return nil
+	}
+
 	if req.Status == StatusSuccess {
 		if err := h.service.ProcessPaymentSuccess(r.Context(), paymentID); err != nil {
 			if errors.Is(err, ErrPaymentNotFound) {
@@ -61,7 +79,7 @@ func (h *Handler) UpdatePaymentStatus(w http.ResponseWriter, r *http.Request) er
 			return err
 		}
 
-		helper.WriteSuccess(w, http.StatusOK, "payment processed")
+		helper.WriteSuccess(w, http.StatusOK, "payment processed: "+StatusSuccess)
 		return nil
 	}
 

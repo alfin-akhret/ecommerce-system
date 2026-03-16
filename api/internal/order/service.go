@@ -15,8 +15,8 @@ import (
 var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
-	db             *pgxpool.Pool // for queries that require transactions, we create a new repository with the transaction as DBTX
-	repo           *Repository   // for simple queries that don't require transactions, we can use the repository with the main DB connection
+	db             *pgxpool.Pool
+	repo           *Repository
 	productUpdater ProductUpdater
 	paymentCreator PaymentCreator
 }
@@ -200,7 +200,7 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	return nil
 }
 
-func (s *Service) ReleaseOrderStockWithTransaction(ctx context.Context, tx pgx.Tx, orderID string) error {
+func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
 	repo := s.repo.WithTx(tx)
 
 	items, err := repo.ListOrderItems(ctx, orderID)
@@ -218,5 +218,6 @@ func (s *Service) ReleaseOrderStockWithTransaction(ctx context.Context, tx pgx.T
 			return err
 		}
 	}
+
 	return nil
 }
