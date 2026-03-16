@@ -18,6 +18,7 @@ type CreatePaymentResponse struct {
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
 	CreatedAt     *time.Time `json:"created_at,omitempty"`
 	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
+	ExpiredAt     *time.Time `json:"expired_at"`
 }
 
 type UpdatePaymentStatusRequest struct {

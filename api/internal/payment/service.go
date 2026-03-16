@@ -31,6 +31,8 @@ const (
 	StatusPaid      = "PAID"
 )
 
+const paymentURL string = "http://localhost:8081/pay?payment_id="
+
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
 var ErrInvalidStatus = errors.New("invalid payment status")
@@ -89,6 +91,9 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	if err != nil {
 		return nil, err
 	}
+
+	expiredAt := time.Now().Add(15 * time.Minute)
+
 	p := &Payment{
 		ID:            paymentID,
 		OrderID:       orderUUID,
@@ -97,13 +102,14 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		PaymentMethod: paymentMethod,
 		CreatedAt:     now,
 		UpdatedAt:     now,
+		ExpiredAt:     expiredAt,
 	}
 
 	if err := repo.CreatePayment(ctx, p); err != nil {
 		return nil, err
 	}
 
-	paymentURL := "localhost:8080/payment-gateway/pay/" + paymentID.String()
+	paymentURL := paymentURL + paymentID.String()
 
 	return &CreatePaymentResponse{
 		ID:            paymentID.String(),
@@ -114,6 +120,7 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		PaymentURL:    paymentURL,
 		CreatedAt:     &p.CreatedAt,
 		UpdatedAt:     &p.UpdatedAt,
+		ExpiredAt:     &expiredAt,
 	}, nil
 }
 
