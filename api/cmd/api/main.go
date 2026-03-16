@@ -36,10 +36,13 @@ func main() {
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
 	r.With(auth.AuthMiddleware).Post("/checkout", helper.Handle(application.OrderHandler.Checkout))
 
+	// Payments route
 	r.Route("/payments", func(r chi.Router) {
 		r.With(auth.AuthMiddleware).Post("/", helper.Handle(application.PaymentHandler.CreatePayment))
 		r.With(auth.AuthMiddleware).Get("/{payment_id}", helper.Handle(application.PaymentHandler.GetPayment))
 		r.With(auth.AuthMiddleware).Patch("/{payment_id}", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
+		r.Post("/{payment_id}/success", helper.Handle(application.PaymentHandler.ProcessPaymentSuccess))
+		r.Post("/{payment_id}/fail", helper.Handle(application.PaymentHandler.ProcessPaymentFailed))
 	})
 
 	r.Route("/products", func(r chi.Router) {
@@ -55,6 +58,9 @@ func main() {
 		r.With(auth.AuthMiddleware, auth.AdminMiddleware).Post("/{id}/confirm", helper.Handle(application.ProductHandler.ConfirmStock))
 
 	})
+
+	// api gateway
+	r.Get("/payment-gateway/pay/{payment_id}", application.PaymentHandler.PaymentPage)
 
 	fmt.Println("Server is running on :" + application.Config.Port)
 

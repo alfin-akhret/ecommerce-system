@@ -156,7 +156,8 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		return nil, err
 	}
 
-	if _, err := s.paymentCreator.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod); err != nil {
+	paymentResp, err := s.paymentCreator.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod)
+	if err != nil {
 		return nil, err
 	}
 
@@ -173,6 +174,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 	return &CheckoutResponse{
 		OrderID:     order.ID.String(),
 		TotalAmount: total,
+		PaymentURL:  "localhost:8080/payment-gateway/pay/" + paymentResp.ID,
 	}, nil
 }
 
