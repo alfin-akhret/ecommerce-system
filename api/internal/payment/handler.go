@@ -124,6 +124,9 @@ func (h *Handler) ProcessPaymentFailed(w http.ResponseWriter, r *http.Request) e
 	return nil
 }
 
+// Mock payment page to simulate a payment gateway.
+// In production, we integrate with the payment gateway via H2H
+// and redirect the user only after receiving a successful response.
 func (h *Handler) PaymentPage(w http.ResponseWriter, r *http.Request) {
 	paymentID := chi.URLParam(r, "payment_id")
 
