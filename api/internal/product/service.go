@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -68,9 +69,24 @@ func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetail
 	return s.repo.GetProductByID(ctx, id)
 }
 
-func (s *Service) GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, id string) (*ProductDetailResponse, error) {
+func (s *Service) GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, id string) (*Product, error) {
 	repo := s.repo.WithTx(tx)
-	return repo.GetProductByID(ctx, id)
+	detail, err := repo.GetProductByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	productID, err := uuid.Parse(detail.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Product{
+		ID:          productID,
+		Name:        detail.Name,
+		Description: detail.Description,
+		Price:       detail.Price,
+	}, nil
 }
 
 func (s *Service) UpdateStock(ctx context.Context, productID string, qty int) error {
