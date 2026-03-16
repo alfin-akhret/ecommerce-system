@@ -18,9 +18,15 @@ Backend e-commerce (work in progress) written in Go. The repo currently contains
   - `POST /products/{id}/reserve`
   - `POST /products/{id}/release`
   - `POST /products/{id}/confirm`
-  - `POST /orders` (protected)
   - `GET /orders` (protected)
   - `GET /orders/{id}` (protected)
+  - `POST /checkout` (protected)
+  - `POST /payments` (protected)
+  - `GET /payments/{payment_id}` (protected)
+  - `PATCH /payments/{payment_id}` (protected)
+  - `POST /payments/{payment_id}/success`
+  - `POST /payments/{payment_id}/fail`
+  - `POST /payments/callback`
 - Postgres schema migrations for:
   - `users`, `products`, `product_inventory`, `orders`, `order_items`, `payments`
 - Local infrastructure via Docker Compose: Postgres + Redis
@@ -142,20 +148,23 @@ You can also use the scratch file `api/api_test.http` to try the endpoints from 
 }
 ```
 
-### Create Order
+### Checkout
 
-- `POST /orders`
+- `POST /checkout`
 - Header: `Authorization: Bearer <token>`
 - Content-Type: `application/json`
 - Body:
 
 ```json
 {
+  "payment_method": "MIDTRANS",
   "items": [
-    { "product_id": "<product-id>", "qty": 2 }
+    { "product_id": "<product-id>", "quantity": 2 }
   ]
 }
 ```
+
+- Response: `200 OK` with `order_id`, `total_amount`, and `payment_url`.
 
 ### List Orders
 
@@ -168,6 +177,45 @@ You can also use the scratch file `api/api_test.http` to try the endpoints from 
 - `GET /orders/{id}`
 - Header: `Authorization: Bearer <token>`
 - Response: `200 OK` with order detail and items.
+
+### Payments
+
+- `POST /payments`
+  - Header: `Authorization: Bearer <token>`
+  - Body:
+
+```json
+{
+  "order_id": "<order-id>",
+  "amount": 125000,
+  "payment_method": "MIDTRANS"
+}
+```
+
+- `GET /payments/{payment_id}`
+  - Header: `Authorization: Bearer <token>`
+
+- `PATCH /payments/{payment_id}`
+  - Header: `Authorization: Bearer <token>`
+  - Body:
+
+```json
+{
+  "status": "SUCCESS"
+}
+```
+
+- `POST /payments/{payment_id}/success` (no auth)
+- `POST /payments/{payment_id}/fail` (no auth)
+- `POST /payments/callback` (no auth)
+  - Body:
+
+```json
+{
+  "payment_id": "<payment-id>",
+  "status": "SUCCESS"
+}
+```
 
 ## Configuration
 
@@ -214,5 +262,3 @@ go run ./cmd/api
 Server prints the port and listens on `http://localhost:8080` by default.
 
 ## Notes / Next Work
-
-- Payments are not implemented yet.
