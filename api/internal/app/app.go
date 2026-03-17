@@ -1,6 +1,10 @@
 package app
 
 import (
+	"context"
+	"log"
+	"time"
+
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
@@ -13,15 +17,17 @@ import (
 type App struct {
 	Config *config.Config
 
-	UserHandler    *user.UserHandler
-	AuthHandler    *auth.AuthHandler
-	ProductHandler *product.Handler
-	OrderHandler   *order.Handler
-	PaymentHandler *payment.Handler
+	UserHandler             *user.UserHandler
+	AuthHandler             *auth.AuthHandler
+	ProductHandler          *product.Handler
+	OrderHandler            *order.Handler
+	PaymentHandler          *payment.Handler
+	PaymentExpirationWorker *payment.PaymentExpirationWorker
 }
 
 func New() (*App, error) {
 	cfg := config.Load()
+	log.Printf("[Config] DATABASE_URL=%s\n", cfg.DBUrl)
 
 	db, err := database.NewPostgres(cfg.DBUrl)
 	if err != nil {
@@ -51,12 +57,33 @@ func New() (*App, error) {
 
 	paymentHandler := payment.NewHandler(paymentService)
 
+	// publisher (sementara simple dulu)
+	eventPublisher := payment.NewInMemoryPublisher()
+	eventPublisher.Subscribe("payment.expired", func(ctx context.Context, payload any) {
+		event, ok := payload.(payment.PaymentExpiredEvent)
+		if !ok {
+			log.Printf("[Event] invalid payload for payment.expired: %T\n", payload)
+			return
+		}
+
+		orderService.CancelOrder(ctx, event.OrderID)
+	})
+
+	// worker
+	expirationWorker := payment.NewPaymentExpirationWorker(
+		paymentService,
+		eventPublisher,
+		10*time.Second,
+		100,
+	)
+
 	return &App{
-		Config:         cfg,
-		UserHandler:    userHandler,
-		AuthHandler:    authHandler,
-		ProductHandler: productHandler,
-		OrderHandler:   orderHandler,
-		PaymentHandler: paymentHandler,
+		Config:                  cfg,
+		UserHandler:             userHandler,
+		AuthHandler:             authHandler,
+		ProductHandler:          productHandler,
+		OrderHandler:            orderHandler,
+		PaymentHandler:          paymentHandler,
+		PaymentExpirationWorker: expirationWorker,
 	}, nil
 }

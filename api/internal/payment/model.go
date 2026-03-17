@@ -15,5 +15,10 @@ type Payment struct {
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
 	CreatedAt     time.Time  `json:"created_at"`
 	UpdatedAt     time.Time  `json:"updated_at"`
-	ExpiredAt     time.Time  `json:"expired_at"`
+	ExpiredAt     *time.Time `json:"expired_at,omitempty"`
+}
+
+type ExpiredPayment struct {
+	ID      uuid.UUID
+	OrderID uuid.UUID
 }

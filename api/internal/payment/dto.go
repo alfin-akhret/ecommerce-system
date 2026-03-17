@@ -29,3 +29,9 @@ type PaymentCallbackRequest struct {
 	PaymentID string `json:"payment_id"`
 	Status    string `json:"status"`
 }
+
+type PaymentExpiredEvent struct {
+	PaymentID string
+	OrderID   string
+	ExpiredAt time.Time
+}

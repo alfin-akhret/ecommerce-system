@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
@@ -163,7 +164,15 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		OrderID:     order.ID.String(),
 		TotalAmount: total,
 		PaymentURL:  paymentResp.PaymentURL,
+		ExpiredAt:   formatOptionalTime(paymentResp.ExpiredAt),
 	}, nil
+}
+
+func formatOptionalTime(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
@@ -210,4 +219,32 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	return nil
+}
+
+// subscribe to topic: "payment.expired"
+func (s *Service) CancelOrder(ctx context.Context, orderID string) {
+	log.Println("[Order] cancel order:", orderID)
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		log.Printf("[Order Service] cancel order error: %v\n", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	if err := s.UpdateOrderStatusWithTx(ctx, tx, orderID, "CANCELLED"); err != nil {
+		log.Printf("[Order Service] cancel order error: %v\n", err)
+		return
+	}
+
+	if err := s.ReleaseOrderStockWithTx(ctx, tx, orderID); err != nil {
+		log.Printf("[Order Service] cancel order error: %v\n", err)
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("[Order Service] cancel order commit error: %v\n", err)
+		return
+	}
+
 }

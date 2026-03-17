@@ -2,6 +2,7 @@ package contracts
 
 import (
 	"context"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 )
@@ -9,6 +10,7 @@ import (
 type PaymentCreateResult struct {
 	ID         string
 	PaymentURL string
+	ExpiredAt  *time.Time
 }
 
 type PaymentUpdater interface {

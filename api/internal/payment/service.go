@@ -28,7 +28,7 @@ const (
 )
 
 const paymentURL string = "http://localhost:8081/pay?payment_id="
-const paymentExpiry = 5 * time.Minute
+const paymentExpiry = 1 * time.Minute // todo: move to config
 
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
@@ -60,6 +60,7 @@ func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID st
 	return &contracts.PaymentCreateResult{
 		ID:         resp.ID,
 		PaymentURL: resp.PaymentURL,
+		ExpiredAt:  resp.ExpiredAt,
 	}, nil
 }
 
@@ -107,7 +108,7 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		PaymentMethod: paymentMethod,
 		CreatedAt:     now,
 		UpdatedAt:     now,
-		ExpiredAt:     expiredAt,
+		ExpiredAt:     &expiredAt,
 	}
 
 	if err := repo.CreatePayment(ctx, p); err != nil {
@@ -264,4 +265,12 @@ func (s *Service) HandleCallback(req PaymentCallbackRequest) error {
 	default:
 		return ErrInvalidStatus
 	}
+}
+
+func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) {
+	expiredPayments, err := s.repo.ExpirePayments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return expiredPayments, nil
 }
