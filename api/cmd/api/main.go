@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net/http"
@@ -60,9 +61,20 @@ func main() {
 
 	})
 
+	// run worker
+	ctx := context.Background()
+
+	application.PaymentExpirationWorker.Start(ctx)
+
+	// handle shutdown
+	defer application.PaymentExpirationWorker.Stop()
+
+	// select {} // block forever (sementara)
+
 	fmt.Println("Server is running on :" + application.Config.Port)
 
 	if err := http.ListenAndServe(":"+application.Config.Port, r); err != nil {
 		log.Fatal(err)
 	}
+
 }

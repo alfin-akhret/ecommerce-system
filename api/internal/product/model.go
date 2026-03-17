@@ -9,6 +9,14 @@ type Product struct {
 	Price       float64
 }
 
+func (p *Product) GetID() uuid.UUID {
+	return p.ID
+}
+
+func (p *Product) GetPrice() float64 {
+	return p.Price
+}
+
 type Inventory struct {
 	ProductID uuid.UUID
 	Stock     int

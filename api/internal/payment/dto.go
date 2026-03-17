@@ -18,6 +18,7 @@ type CreatePaymentResponse struct {
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
 	CreatedAt     *time.Time `json:"created_at,omitempty"`
 	UpdatedAt     *time.Time `json:"updated_at,omitempty"`
+	ExpiredAt     *time.Time `json:"expired_at"`
 }
 
 type UpdatePaymentStatusRequest struct {
@@ -27,4 +28,10 @@ type UpdatePaymentStatusRequest struct {
 type PaymentCallbackRequest struct {
 	PaymentID string `json:"payment_id"`
 	Status    string `json:"status"`
+}
+
+type PaymentExpiredEvent struct {
+	PaymentID string
+	OrderID   string
+	ExpiredAt time.Time
 }

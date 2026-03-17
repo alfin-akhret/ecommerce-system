@@ -3,10 +3,10 @@ package order
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
-	"github.com/alfin-akhret/ecommerce-system/internal/payment"
-	"github.com/alfin-akhret/ecommerce-system/internal/product"
+	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,27 +14,14 @@ import (
 
 var ErrOrderNotFound = errors.New("order not found")
 
-const paymentURL string = "http://localhost:8081/pay?payment_id="
-
 type Service struct {
 	db             *pgxpool.Pool
 	repo           *Repository
-	productUpdater ProductUpdater
-	paymentCreator PaymentCreator
+	productUpdater contracts.ProductUpdater
+	paymentUpdater contracts.PaymentUpdater
 }
 
-type ProductUpdater interface {
-	GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, productID string) (*product.Product, error)
-	ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
-	ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
-	ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
-}
-
-type PaymentCreator interface {
-	CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, method string) (*payment.CreatePaymentResponse, error)
-}
-
-func NewService(db *pgxpool.Pool, productUpdater ProductUpdater, paymentCreator PaymentCreator) *Service {
+func NewService(db *pgxpool.Pool, productUpdater contracts.ProductUpdater, paymentUpdater contracts.PaymentUpdater) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -42,7 +29,7 @@ func NewService(db *pgxpool.Pool, productUpdater ProductUpdater, paymentCreator 
 		db:             db,
 		repo:           repo,
 		productUpdater: productUpdater,
-		paymentCreator: paymentCreator,
+		paymentUpdater: paymentUpdater,
 	}
 }
 
@@ -137,15 +124,15 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		}
 
 		itemQty := item.Quantity
-		subtotal := product.Price * float64(itemQty)
+		subtotal := product.GetPrice() * float64(itemQty)
 		total += subtotal
 
 		// parse product ID
 		OrderItem := &OrderItem{
 			ID:        uuid.New(),
 			OrderID:   order.ID,
-			ProductID: product.ID,
-			Price:     product.Price,
+			ProductID: product.GetID(),
+			Price:     product.GetPrice(),
 			Qty:       itemQty,
 		}
 
@@ -158,7 +145,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		return nil, err
 	}
 
-	paymentResp, err := s.paymentCreator.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod)
+	paymentResp, err := s.paymentUpdater.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod)
 	if err != nil {
 		return nil, err
 	}
@@ -176,8 +163,16 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 	return &CheckoutResponse{
 		OrderID:     order.ID.String(),
 		TotalAmount: total,
-		PaymentURL:  paymentURL + paymentResp.ID,
+		PaymentURL:  paymentResp.PaymentURL,
+		ExpiredAt:   formatOptionalTime(paymentResp.ExpiredAt),
 	}, nil
+}
+
+func formatOptionalTime(t *time.Time) string {
+	if t == nil {
+		return ""
+	}
+	return t.Format(time.RFC3339)
 }
 
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
@@ -224,4 +219,32 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	return nil
+}
+
+// subscribe to topic: "payment.expired"
+func (s *Service) CancelOrder(ctx context.Context, orderID string) {
+	log.Println("[Order] cancel order:", orderID)
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		log.Printf("[Order Service] cancel order error: %v\n", err)
+		return
+	}
+	defer tx.Rollback(ctx)
+
+	if err := s.UpdateOrderStatusWithTx(ctx, tx, orderID, "CANCELLED"); err != nil {
+		log.Printf("[Order Service] cancel order error: %v\n", err)
+		return
+	}
+
+	if err := s.ReleaseOrderStockWithTx(ctx, tx, orderID); err != nil {
+		log.Printf("[Order Service] cancel order error: %v\n", err)
+		return
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		log.Printf("[Order Service] cancel order commit error: %v\n", err)
+		return
+	}
+
 }

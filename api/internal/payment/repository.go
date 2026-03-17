@@ -25,8 +25,8 @@ func (r *Repository) WithTx(tx pgx.Tx) *Repository {
 
 func (r *Repository) CreatePayment(ctx context.Context, p *Payment) error {
 	query := `
-	INSERT INTO payments (id, order_id, amount, status, payment_method, paid_at, created_at, updated_at)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+	INSERT INTO payments (id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at)
+	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
 	`
 
 	_, err := r.db.Exec(ctx, query,
@@ -38,6 +38,7 @@ func (r *Repository) CreatePayment(ctx context.Context, p *Payment) error {
 		p.PaidAt,
 		p.CreatedAt,
 		p.UpdatedAt,
+		p.ExpiredAt,
 	)
 
 	return err
@@ -66,7 +67,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, paymentID string, status 
 // get payment by id
 func (r *Repository) GetByID(ctx context.Context, paymentID string) (*Payment, error) {
 	query := `
-	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at
+	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at
 	FROM payments
 	WHERE id = $1
 	`
@@ -81,6 +82,7 @@ func (r *Repository) GetByID(ctx context.Context, paymentID string) (*Payment, e
 		&p.PaidAt,
 		&p.CreatedAt,
 		&p.UpdatedAt,
+		&p.ExpiredAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -95,7 +97,7 @@ func (r *Repository) GetByID(ctx context.Context, paymentID string) (*Payment, e
 // get payment by orderID
 func (r *Repository) GetByOrderID(ctx context.Context, orderID string) (*Payment, error) {
 	query := `
-	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at
+	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at
 	FROM payments
 	WHERE order_id = $1
 	`
@@ -109,6 +111,7 @@ func (r *Repository) GetByOrderID(ctx context.Context, orderID string) (*Payment
 		&p.PaidAt,
 		&p.CreatedAt,
 		&p.UpdatedAt,
+		&p.ExpiredAt,
 	)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
@@ -117,4 +120,76 @@ func (r *Repository) GetByOrderID(ctx context.Context, orderID string) (*Payment
 		return nil, err
 	}
 	return &p, nil
+}
+
+func (r *Repository) FindExpiredPayments(ctx context.Context) ([]Payment, error) {
+	query := `
+	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at
+	FROM payments
+	WHERE status = $1
+	  AND expired_at IS NOT NULL
+	  AND expired_at < NOW()
+	`
+
+	rows, err := r.db.Query(ctx, query, StatusPending)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var payments []Payment
+	for rows.Next() {
+		var p Payment
+		if err := rows.Scan(
+			&p.ID,
+			&p.OrderID,
+			&p.Amount,
+			&p.Status,
+			&p.PaymentMethod,
+			&p.PaidAt,
+			&p.CreatedAt,
+			&p.UpdatedAt,
+			&p.ExpiredAt,
+		); err != nil {
+			return nil, err
+		}
+		payments = append(payments, p)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return payments, nil
+}
+
+func (r *Repository) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) {
+	now := time.Now()
+	query := `
+	UPDATE payments
+	SET status = $1,
+		updated_at = $2
+	WHERE status = $3
+	  AND expired_at IS NOT NULL
+	  AND expired_at < $2
+	RETURNING id, order_id
+	`
+
+	rows, err := r.db.Query(ctx, query, StatusExpired, now, StatusPending)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []ExpiredPayment
+
+	for rows.Next() {
+		var p ExpiredPayment
+		if err := rows.Scan(&p.ID, &p.OrderID); err != nil {
+			return nil, err
+		}
+		results = append(results, p)
+	}
+
+	return results, nil
 }

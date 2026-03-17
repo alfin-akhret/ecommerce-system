@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -14,13 +15,7 @@ import (
 type Service struct {
 	db                 *pgxpool.Pool
 	repo               *Repository
-	orderStatusUpdater OrderUpdater
-}
-
-type OrderUpdater interface {
-	UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error
-	ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error
-	ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error
+	orderStatusUpdater contracts.OrderUpdater
 }
 
 const (
@@ -29,7 +24,11 @@ const (
 	StatusFailed    = "FAILED"
 	StatusCancelled = "CANCELLED"
 	StatusPaid      = "PAID"
+	StatusExpired   = "EXPIRED"
 )
+
+const paymentURL string = "http://localhost:8081/pay?payment_id="
+const paymentExpiry = 1 * time.Minute // todo: move to config
 
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
@@ -43,7 +42,7 @@ func NewService(db *pgxpool.Pool) *Service {
 	}
 }
 
-func (s *Service) SetOrderStatusUpdater(updater OrderUpdater) {
+func (s *Service) SetOrderStatusUpdater(updater contracts.OrderUpdater) {
 	s.orderStatusUpdater = updater
 }
 
@@ -52,8 +51,17 @@ func (s *Service) CreatePayment(ctx context.Context, orderID string, amount floa
 	return s.createPayment(ctx, s.repo, orderID, amount, paymentMethod)
 }
 
-func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, paymentMethod string) (*CreatePaymentResponse, error) {
-	return s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
+func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
+	if err != nil {
+		return nil, err
+	}
+
+	return &contracts.PaymentCreateResult{
+		ID:         resp.ID,
+		PaymentURL: resp.PaymentURL,
+		ExpiredAt:  resp.ExpiredAt,
+	}, nil
 }
 
 // Update payment status and optionally set PaidAt
@@ -89,6 +97,9 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	if err != nil {
 		return nil, err
 	}
+
+	expiredAt := time.Now().Add(paymentExpiry)
+
 	p := &Payment{
 		ID:            paymentID,
 		OrderID:       orderUUID,
@@ -97,13 +108,14 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		PaymentMethod: paymentMethod,
 		CreatedAt:     now,
 		UpdatedAt:     now,
+		ExpiredAt:     &expiredAt,
 	}
 
 	if err := repo.CreatePayment(ctx, p); err != nil {
 		return nil, err
 	}
 
-	paymentURL := "localhost:8080/payment-gateway/pay/" + paymentID.String()
+	paymentURL := paymentURL + paymentID.String()
 
 	return &CreatePaymentResponse{
 		ID:            paymentID.String(),
@@ -114,6 +126,7 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		PaymentURL:    paymentURL,
 		CreatedAt:     &p.CreatedAt,
 		UpdatedAt:     &p.UpdatedAt,
+		ExpiredAt:     &expiredAt,
 	}, nil
 }
 
@@ -252,4 +265,12 @@ func (s *Service) HandleCallback(req PaymentCallbackRequest) error {
 	default:
 		return ErrInvalidStatus
 	}
+}
+
+func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) {
+	expiredPayments, err := s.repo.ExpirePayments(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return expiredPayments, nil
 }
