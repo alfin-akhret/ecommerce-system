@@ -1,6 +1,9 @@
 package payment
 
-import "context"
+import (
+	"context"
+	"log"
+)
 
 type EventHandler func(ctx context.Context, payload any)
 
@@ -20,7 +23,7 @@ func (p *InMemoryPublisher) Publish(ctx context.Context, topic string, payload a
 			go func(handler EventHandler) {
 				defer func() {
 					if r := recover(); r != nil {
-						// best-effort safety: avoid panic crashing worker goroutine
+						log.Printf("[EventPublisher] handler panic: %v\n", r)
 					}
 				}()
 				handler(ctx, payload)
