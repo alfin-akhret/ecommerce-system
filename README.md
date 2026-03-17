@@ -54,49 +54,100 @@ Key locations:
 
 ## Payment Expiration Flow
 
-```mermaid
-flowchart TD
-    A[PaymentExpirationWorker Start] --> B[Tick Interval]
-    B --> C[ExpirePayments: update payments status to EXPIRED]
-    C --> D{Expired Payments Found?}
-    D -- No --> B
-    D -- Yes --> E[Publish payment.expired event]
-    E --> F[OrderService CancelOrder]
-    F --> G[Update order status = CANCELLED]
-    G --> H[Release reserved stock]
-    H --> B
+```
+PaymentExpirationWorker Start
+    |
+    v
+Tick Interval
+    |
+    v
+ExpirePayments (set status=EXPIRED)
+    |
+    v
+Expired payments found?
+    |-- no --> (wait next tick)
+    |
+    +-- yes --> Publish "payment.expired"
+                  |
+                  v
+             OrderService.CancelOrder
+                  |
+                  v
+         Update order status = CANCELLED
+                  |
+                  v
+            Release reserved stock
 ```
 
 ## Checkout + Payment Success Flow
 
-```mermaid
-flowchart TD
-    A[Client POST /checkout] --> B[OrderService Checkout]
-    B --> C[Reserve stock per item]
-    C --> D[Create order + order items]
-    D --> E[Create payment with status PENDING]
-    E --> F[Respond with payment_url]
-    F --> G[Client completes payment]
-    G --> H[POST /payments/{payment_id}/success]
-    H --> I[ProcessPaymentSuccess]
-    I --> J[Update payment status = SUCCESS + paid_at]
-    J --> K[Confirm order stock]
-    K --> L[Update order status = PAID]
+```
+Client POST /checkout
+    |
+    v
+OrderService.Checkout
+    |
+    v
+Reserve stock per item
+    |
+    v
+Create order + order items
+    |
+    v
+Create payment (status=PENDING)
+    |
+    v
+Respond with payment_url
+    |
+    v
+Client completes payment
+    |
+    v
+POST /payments/{payment_id}/success
+    |
+    v
+ProcessPaymentSuccess
+    |
+    v
+Update payment status = SUCCESS + paid_at
+    |
+    v
+Confirm order stock
+    |
+    v
+Update order status = PAID
 ```
 
 ## Payment Failed / Expired Flow
 
-```mermaid
-flowchart TD
-    A[Payment FAILED] --> B[POST /payments/{payment_id}/fail]
-    B --> C[ProcessPaymentFailed]
-    C --> D[Update payment status = FAILED]
-    D --> E[Release reserved stock]
-    E --> F[Update order status = CANCELLED]
+```
+Payment FAILED
+    |
+    v
+POST /payments/{payment_id}/fail
+    |
+    v
+ProcessPaymentFailed
+    |
+    v
+Update payment status = FAILED
+    |
+    v
+Release reserved stock
+    |
+    v
+Update order status = CANCELLED
 
-    G[PaymentExpiredEvent] --> H[OrderService CancelOrder]
-    H --> I[Update order status = CANCELLED]
-    I --> J[Release reserved stock]
+PaymentExpiredEvent
+    |
+    v
+OrderService.CancelOrder
+    |
+    v
+Update order status = CANCELLED
+    |
+    v
+Release reserved stock
 ```
 
 Notes:
