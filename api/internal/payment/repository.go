@@ -169,9 +169,13 @@ func (r *Repository) ExpirePayments(ctx context.Context) ([]ExpiredPayment, erro
 	UPDATE payments
 	SET status = $1,
 		updated_at = $2
-	WHERE status = $3
-	  AND expired_at IS NOT NULL
-	  AND expired_at < $2
+	WHERE id IN (
+		SELECT id
+		FROM payments
+		WHERE status = $3
+		  AND expired_at < $2
+		LIMIT 100
+	)
 	RETURNING id, order_id
 	`
 
