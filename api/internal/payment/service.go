@@ -75,7 +75,9 @@ func (s *Service) UpdatePaymentStatusWithTx(ctx context.Context, tx pgx.Tx, paym
 
 // Get payment by ID
 func (s *Service) GetPaymentByID(ctx context.Context, paymentID string) (*Payment, error) {
+
 	return s.repo.GetByID(ctx, paymentID)
+
 }
 
 // Get payment by order ID
@@ -92,13 +94,12 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	}
 
 	paymentID := uuid.New()
-	now := time.Now()
 	orderUUID, err := uuid.Parse(orderID)
 	if err != nil {
 		return nil, err
 	}
 
-	expiredAt := time.Now().Add(paymentExpiry)
+	expiredAt := time.Now().UTC().Add(paymentExpiry)
 
 	p := &Payment{
 		ID:            paymentID,
@@ -106,8 +107,6 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		Amount:        amount,
 		Status:        StatusPending,
 		PaymentMethod: paymentMethod,
-		CreatedAt:     now,
-		UpdatedAt:     now,
 		ExpiredAt:     &expiredAt,
 	}
 
@@ -124,8 +123,8 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		Amount:        amount,
 		PaymentMethod: paymentMethod,
 		PaymentURL:    paymentURL,
-		CreatedAt:     &p.CreatedAt,
-		UpdatedAt:     &p.UpdatedAt,
+		CreatedAt:     p.CreatedAt,
+		UpdatedAt:     p.UpdatedAt,
 		ExpiredAt:     &expiredAt,
 	}, nil
 }
@@ -223,7 +222,7 @@ func (s *Service) processPayment(
 
 	var paidAt *time.Time
 	if nextStatus == StatusSuccess {
-		now := time.Now()
+		now := time.Now().UTC()
 		paidAt = &now
 	}
 

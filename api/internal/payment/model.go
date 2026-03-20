@@ -13,8 +13,8 @@ type Payment struct {
 	Status        string     `json:"status"`
 	PaymentMethod string     `json:"payment_method"`
 	PaidAt        *time.Time `json:"paid_at,omitempty"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
+	CreatedAt     *time.Time `json:"created_at"`
+	UpdatedAt     *time.Time `json:"updated_at"`
 	ExpiredAt     *time.Time `json:"expired_at,omitempty"`
 }
 

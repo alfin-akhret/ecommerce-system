@@ -25,8 +25,8 @@ func (r *Repository) WithTx(tx pgx.Tx) *Repository {
 
 func (r *Repository) CreatePayment(ctx context.Context, p *Payment) error {
 	query := `
-	INSERT INTO payments (id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at)
-	VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+	INSERT INTO payments (id, order_id, amount, status, payment_method, paid_at, expired_at)
+	VALUES ($1,$2,$3,$4,$5,$6,$7)
 	`
 
 	_, err := r.db.Exec(ctx, query,
@@ -36,8 +36,6 @@ func (r *Repository) CreatePayment(ctx context.Context, p *Payment) error {
 		p.Status,
 		p.PaymentMethod,
 		p.PaidAt,
-		p.CreatedAt,
-		p.UpdatedAt,
 		p.ExpiredAt,
 	)
 
@@ -164,22 +162,21 @@ func (r *Repository) FindExpiredPayments(ctx context.Context) ([]Payment, error)
 }
 
 func (r *Repository) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) {
-	now := time.Now()
 	query := `
 	UPDATE payments
 	SET status = $1,
-		updated_at = $2
+		updated_at = NOW()
 	WHERE id IN (
 		SELECT id
 		FROM payments
-		WHERE status = $3
-		  AND expired_at < $2
+		WHERE status = $2
+		  AND expired_at < NOW()
 		LIMIT 100
 	)
 	RETURNING id, order_id
 	`
 
-	rows, err := r.db.Query(ctx, query, StatusExpired, now, StatusPending)
+	rows, err := r.db.Query(ctx, query, StatusExpired, StatusPending)
 	if err != nil {
 		return nil, err
 	}

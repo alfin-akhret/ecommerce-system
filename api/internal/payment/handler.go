@@ -71,7 +71,9 @@ func (h *Handler) GetPayment(w http.ResponseWriter, r *http.Request) error {
 		return err
 	}
 
-	helper.WriteSuccess(w, http.StatusOK, payment)
+	resp := toPaymentResponse(payment)
+
+	helper.WriteSuccess(w, http.StatusOK, resp)
 	return nil
 }
 
@@ -145,4 +147,18 @@ func (h *Handler) ProcessPaymentFailed(w http.ResponseWriter, r *http.Request) e
 
 	helper.WriteSuccess(w, http.StatusOK, "payment processed: "+StatusFailed)
 	return nil
+}
+
+func toPaymentResponse(payment *Payment) PaymentByIDResponse {
+	return PaymentByIDResponse{
+		ID:            payment.ID.String(),
+		OrderID:       payment.OrderID.String(),
+		Amount:        payment.Amount,
+		Status:        payment.Status,
+		PaymentMethod: payment.PaymentMethod,
+		PaidAt:        helper.FormatOptionalTime(payment.PaidAt),
+		CreatedAt:     helper.FormatOptionalTime(payment.CreatedAt),
+		UpdatedAt:     helper.FormatOptionalTime(payment.UpdatedAt),
+		ExpiredAt:     helper.FormatOptionalTime(payment.ExpiredAt),
+	}
 }

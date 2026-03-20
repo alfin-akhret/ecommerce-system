@@ -2,6 +2,7 @@ package user
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/go-chi/chi"
@@ -82,6 +83,6 @@ func toUserResponse(user *User) UserResponse {
 		ID:        user.ID.String(),
 		Name:      user.Name,
 		Email:     user.Email,
-		CreatedAt: user.CreatedAt,
+		CreatedAt: user.CreatedAt.UTC().Format(time.RFC3339),
 	}
 }

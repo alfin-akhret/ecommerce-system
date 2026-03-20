@@ -37,5 +37,5 @@ type CheckoutResponse struct {
 	OrderID     string  `json:"order_id"`
 	TotalAmount float64 `json:"total_amount"`
 	PaymentURL  string  `json:"payment_url"`
-	ExpiredAt   string  `json:"expired_at"`
+	ExpiredAt   *string `json:"expired_at"`
 }

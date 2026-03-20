@@ -35,3 +35,15 @@ type PaymentExpiredEvent struct {
 	OrderID   string
 	ExpiredAt time.Time
 }
+
+type PaymentByIDResponse struct {
+	ID            string  `json:"id"`
+	OrderID       string  `json:"order_id"`
+	Amount        float64 `json:"amount"`
+	Status        string  `json:"status"`
+	PaymentMethod string  `json:"payment_method"`
+	PaidAt        *string `json:"paid_at,omitempty"`
+	CreatedAt     *string `json:"created_at"`
+	UpdatedAt     *string `json:"updated_at"`
+	ExpiredAt     *string `json:"expired_at,omitempty"`
+}

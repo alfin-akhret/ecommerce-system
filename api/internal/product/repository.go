@@ -136,7 +136,7 @@ func (r *Repository) UpdateReserved(ctx context.Context, productID string, qty i
 	return err
 }
 
-func (r *Repository) ReleaserReserved(ctx context.Context, productID string, qty int) error {
+func (r *Repository) ReleasedReserved(ctx context.Context, productID string, qty int) error {
 	query := `
 	UPDATE product_inventory
 	SET reserved = reserved - $1,

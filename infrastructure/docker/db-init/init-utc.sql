@@ -1,0 +1,1 @@
+ALTER DATABASE ecommerce SET timezone TO 'UTC';

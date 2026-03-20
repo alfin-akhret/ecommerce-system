@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -45,7 +46,7 @@ func (s *Service) ListOrders(ctx context.Context, userID string) ([]OrderListIte
 			ID:          o.ID.String(),
 			Status:      o.Status,
 			TotalAmount: o.TotalAmount,
-			CreatedAt:   o.CreatedAt.Format(time.RFC3339),
+			CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
 
@@ -81,7 +82,7 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 		UserID:      order.UserID.String(),
 		Status:      order.Status,
 		TotalAmount: order.TotalAmount,
-		CreatedAt:   order.CreatedAt.Format(time.RFC3339),
+		CreatedAt:   order.CreatedAt.UTC().Format(time.RFC3339),
 		Items:       items,
 	}, nil
 }
@@ -164,15 +165,8 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		OrderID:     order.ID.String(),
 		TotalAmount: total,
 		PaymentURL:  paymentResp.PaymentURL,
-		ExpiredAt:   formatOptionalTime(paymentResp.ExpiredAt),
+		ExpiredAt:   helper.FormatOptionalTime(paymentResp.ExpiredAt),
 	}, nil
-}
-
-func formatOptionalTime(t *time.Time) string {
-	if t == nil {
-		return ""
-	}
-	return t.Format(time.RFC3339)
 }
 
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {

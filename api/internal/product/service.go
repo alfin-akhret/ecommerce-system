@@ -156,7 +156,7 @@ func (s *Service) ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 		return ErrInvalidReserved
 	}
 
-	if err := repo.ReleaserReserved(ctx, productID, qty); err != nil {
+	if err := repo.ReleasedReserved(ctx, productID, qty); err != nil {
 		return err
 	}
 
