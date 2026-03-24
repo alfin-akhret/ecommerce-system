@@ -1,5 +1,5 @@
 # 🛒 Cart
-
+`api/internal/cart`
 ## 1. Overview
 Cart is an aggregate root represents user's shoping cart.
 - Store items `(CartItems)` the user wants to buy.
