@@ -2,8 +2,8 @@
 
 ## 1. Overview
 Cart is an aggregate root represents user's shoping cart.
-- Store items `(CartItems)` what user want to buy.
-- Keeping domain invariant (rules) such as `qty > 0`, valid price, cart must have an owner, etc.
+- Store items `(CartItems)` the user wants to buy.
+- Keeping domain invariant (rules) such as `qty > 0`, valid price, must have an owner, etc.
 - every state mutation must be done through domain methods (`AddItem, RemoveItem, UpdateQuantity`).
   
 
@@ -25,9 +25,9 @@ type CartItem struct {
 ```
 func NewCart(owner uuid.UUID) (*Cart, error)
 ```
-- Validation: owner is mandatory
-- initialize map items
-- keeping invariant: cart cannot be created without owner
+- ✅ Validation: owner is mandatory
+- ✅ initialize map items
+- ✅ keeping invariant: cart cannot be created without owner
 
 ## 3. Domain Methods
 
@@ -80,8 +80,8 @@ total := cart.Total()
 items := cart.ListItems()
 ```
 ## Notes / Best Practice
-- All state mutations should go through domain methods; do not manipulate the map directly.
-- AddItem and UpdateQuantity already handle merging and auto-removal → simplifies UX.
-- Price is stored as int64 to avoid floating-point rounding issues.
-- Optional: you can add helper methods for promo/discount later without changing the core domain.
-- The domain is unaware of the DB/service/API; that is the responsibility of the service layer.
+- ⚡ All state mutations should go through domain methods; do not manipulate the map directly.
+- 🔄 AddItem and UpdateQuantity already handle merging and auto-removal → simplifies UX.
+- 💰 Price is stored as int64 to avoid floating-point rounding issues.
+- 🛠 Optional: you can add helper methods for promo/discount later without changing the core domain.
+- 🌐 The domain is unaware of the DB/service/API; that is the responsibility of the service layer.
