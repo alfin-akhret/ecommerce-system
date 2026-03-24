@@ -14,12 +14,24 @@ type Cart struct {
 type CartItem struct {
 	ID    uuid.UUID
 	Qty   int
-	Price float64
+	Price int64
+}
+
+func NewCart(owner uuid.UUID) (*Cart, error) {
+	if owner == uuid.Nil {
+		return nil, errors.New("cart must have an owner")
+	}
+
+	return &Cart{
+		Owner: owner,
+		Items: make(map[uuid.UUID]CartItem),
+	}, nil
 }
 
 var ErrInvalidQty = errors.New("quantity must be greater than 0")
 var ErrInvalidPrice = errors.New("price must be greater than 0")
 var ErrEmptyCart = errors.New("cart is empty")
+var ErrItemNotFound = errors.New("item not found")
 var ErrInvalidItemID = errors.New("invalid item id")
 
 // validator helper
@@ -59,7 +71,7 @@ func ensureCartItem(c *Cart) func() error {
 	}
 }
 
-func ensurePrice(price float64) func() error {
+func ensurePrice(price int64) func() error {
 	return func() error {
 		if price <= 0 {
 			return ErrInvalidPrice
@@ -68,14 +80,10 @@ func ensurePrice(price float64) func() error {
 	}
 }
 
-func (c *Cart) addItem(id uuid.UUID, qty int, price float64) error {
+func (c *Cart) AddItem(id uuid.UUID, qty int, price int64) error {
 
 	if err := validate(ensureId(id), ensurePrice(price), ensureQty(qty)); err != nil {
 		return err
-	}
-
-	if c.Items == nil {
-		c.Items = make(map[uuid.UUID]CartItem)
 	}
 
 	item, ok := c.Items[id]
@@ -95,7 +103,7 @@ func (c *Cart) addItem(id uuid.UUID, qty int, price float64) error {
 
 }
 
-func (c *Cart) removeItem(id uuid.UUID) error {
+func (c *Cart) RemoveItem(id uuid.UUID) error {
 	if err := validate(ensureId(id), ensureCartItem(c)); err != nil {
 		return err
 	}
@@ -105,22 +113,42 @@ func (c *Cart) removeItem(id uuid.UUID) error {
 		delete(c.Items, id)
 		return nil
 	}
-	return ErrEmptyCart
+	return ErrItemNotFound
 }
 
-func (c *Cart) changeQuantity(id uuid.UUID, qty int) error {
+func (c *Cart) UpdateQuantity(id uuid.UUID, qty int) error {
 
-	if err := validate(ensureId(id), ensureCartItem(c), ensureQty(qty)); err != nil {
+	if err := validate(ensureId(id), ensureCartItem(c)); err != nil {
 		return err
 	}
 
 	item, ok := c.Items[id]
 	if ok {
+		if qty <= 0 {
+			delete(c.Items, id)
+			return nil
+		}
 		item.Qty = qty
 		c.Items[id] = item
 		return nil
 	}
 
-	return ErrEmptyCart
+	return ErrItemNotFound
 
+}
+
+func (c *Cart) Total() int64 {
+	total := int64(0)
+	for _, item := range c.Items {
+		total += item.Price * int64(item.Qty)
+	}
+	return total
+}
+
+func (c *Cart) ListItem() []CartItem {
+	items := make([]CartItem, 0, len(c.Items))
+	for _, item := range c.Items {
+		items = append(items, item)
+	}
+	return items
 }
