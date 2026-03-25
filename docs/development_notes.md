@@ -10,3 +10,4 @@ Other options (if we don't want to make an actual call to redis):
 TODO: 
 - set cart TTL: 24 hours
 - change all price to int64, including in DB
+- add engineering notes: topic: price data type
