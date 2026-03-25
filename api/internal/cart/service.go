@@ -38,3 +38,11 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 
 	return "cart updated", nil
 }
+
+func (s *CartService) DeleteCart(ctx context.Context, ownerID string) (string, error) {
+	if err := s.repo.Delete(ctx, ownerID); err != nil {
+		return "", err
+	}
+
+	return "cart deleted", nil
+}

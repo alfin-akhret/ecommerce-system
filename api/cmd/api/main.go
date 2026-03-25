@@ -41,6 +41,7 @@ func main() {
 
 	// protected: cart
 	r.With(auth.AuthMiddleware).Post("/cart", helper.Handle(application.CartHandler.AddItem))
+	r.With(auth.AuthMiddleware).Delete("/cart", helper.Handle(application.CartHandler.DeleteCart))
 
 	// Payments route
 	r.Route("/payments", func(r chi.Router) {

@@ -12,7 +12,7 @@ import (
 type CartUpdater interface {
 	Get(ctx context.Context, userID uuid.UUID) (*Cart, error)
 	Save(ctx context.Context, cart *Cart) error
-	Delete(ctx context.Context, userID uuid.UUID) error
+	Delete(ctx context.Context, userID string) error
 }
 
 type CartRepository struct {
@@ -46,7 +46,11 @@ func (c *CartRepository) Save(ctx context.Context, cart *Cart) error {
 	return nil
 }
 
-func (c *CartRepository) Delete(ctx context.Context, userID uuid.UUID) error {
-	// not implemented yet
+func (c *CartRepository) Delete(ctx context.Context, ownerID string) error {
+
+	if err := c.db.Del(ctx, "cart:"+ownerID).Err(); err != nil {
+		return err
+	}
+
 	return nil
 }

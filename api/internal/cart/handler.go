@@ -43,3 +43,19 @@ func (h *Handler) AddItem(w http.ResponseWriter, r *http.Request) error {
 	helper.WriteSuccess(w, http.StatusOK, resp)
 	return nil
 }
+
+func (h *Handler) DeleteCart(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	userID, ok := auth.GetUserID(ctx)
+	if !ok {
+		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
+	}
+
+	resp, err := h.service.DeleteCart(ctx, userID)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, resp)
+	return nil
+}
