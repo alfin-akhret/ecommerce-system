@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
+	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
@@ -22,6 +23,7 @@ type App struct {
 	ProductHandler          *product.Handler
 	OrderHandler            *order.Handler
 	PaymentHandler          *payment.Handler
+	CartHandler             *cart.Handler
 	PaymentExpirationWorker *payment.PaymentExpirationWorker
 }
 
@@ -34,7 +36,7 @@ func New() (*App, error) {
 		return nil, err
 	}
 
-	// rdb := database.NewRedis(cfg.RedisAddr)
+	rdb := database.NewRedis(cfg.RedisAddr)
 
 	// user
 	userRepo := user.NewUserRepository(db)
@@ -56,6 +58,11 @@ func New() (*App, error) {
 	paymentService.SetOrderStatusUpdater(orderService)
 
 	paymentHandler := payment.NewHandler(paymentService)
+
+	// cart
+	cartRepo := cart.CreateNewCartRepository(rdb)
+	cartService := cart.NewCartService(cartRepo)
+	cartHandler := cart.NewHandler(cartService)
 
 	// publisher (sementara simple dulu)
 	eventPublisher := payment.NewInMemoryPublisher()
@@ -84,6 +91,7 @@ func New() (*App, error) {
 		ProductHandler:          productHandler,
 		OrderHandler:            orderHandler,
 		PaymentHandler:          paymentHandler,
+		CartHandler:             cartHandler,
 		PaymentExpirationWorker: expirationWorker,
 	}, nil
 }

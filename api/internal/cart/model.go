@@ -12,9 +12,9 @@ type Cart struct {
 }
 
 type CartItem struct {
-	ID    uuid.UUID
-	Qty   int
-	Price int64
+	ProductID uuid.UUID
+	Qty       int
+	Price     int64
 }
 
 func NewCart(owner uuid.UUID) (*Cart, error) {
@@ -80,56 +80,56 @@ func ensurePrice(price int64) func() error {
 	}
 }
 
-func (c *Cart) AddItem(id uuid.UUID, qty int, price int64) error {
+func (c *Cart) AddItem(productID uuid.UUID, qty int, price int64) error {
 
-	if err := validate(ensureId(id), ensurePrice(price), ensureQty(qty)); err != nil {
+	if err := validate(ensureId(productID), ensurePrice(price), ensureQty(qty)); err != nil {
 		return err
 	}
 
-	item, ok := c.Items[id]
+	item, ok := c.Items[productID]
 	if ok {
 		item.Qty += qty
 	} else {
 		item = CartItem{
-			ID:    id,
-			Qty:   qty,
-			Price: price,
+			ProductID: productID,
+			Qty:       qty,
+			Price:     price,
 		}
 	}
 
-	c.Items[id] = item
+	c.Items[productID] = item
 
 	return nil
 
 }
 
-func (c *Cart) RemoveItem(id uuid.UUID) error {
-	if err := validate(ensureId(id), ensureCartItem(c)); err != nil {
+func (c *Cart) RemoveItem(productID uuid.UUID) error {
+	if err := validate(ensureId(productID), ensureCartItem(c)); err != nil {
 		return err
 	}
 
-	_, ok := c.Items[id]
+	_, ok := c.Items[productID]
 	if ok {
-		delete(c.Items, id)
+		delete(c.Items, productID)
 		return nil
 	}
 	return ErrItemNotFound
 }
 
-func (c *Cart) UpdateQuantity(id uuid.UUID, qty int) error {
+func (c *Cart) UpdateQuantity(productID uuid.UUID, qty int) error {
 
-	if err := validate(ensureId(id), ensureCartItem(c)); err != nil {
+	if err := validate(ensureId(productID), ensureCartItem(c)); err != nil {
 		return err
 	}
 
-	item, ok := c.Items[id]
+	item, ok := c.Items[productID]
 	if ok {
 		if qty <= 0 {
-			delete(c.Items, id)
+			delete(c.Items, productID)
 			return nil
 		}
 		item.Qty = qty
-		c.Items[id] = item
+		c.Items[productID] = item
 		return nil
 	}
 

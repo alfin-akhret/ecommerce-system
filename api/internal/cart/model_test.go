@@ -54,8 +54,8 @@ func TestCartAddItem(t *testing.T) {
 			t.Fatalf("expected product %s to exist in cart", productID)
 		}
 
-		if item.ID != productID {
-			t.Fatalf("expected product id %s, got %s", productID, item.ID)
+		if item.ProductID != productID {
+			t.Fatalf("expected product id %s, got %s", productID, item.ProductID)
 		}
 
 		if item.Qty != 2 {
@@ -73,7 +73,7 @@ func TestCartAddItem(t *testing.T) {
 			Owner: uuid.New(),
 			Items: map[uuid.UUID]CartItem{
 				productID: {
-					ID: productID,
+					ProductID: productID,
 					Qty:       1,
 					Price:     15000,
 				},
@@ -171,12 +171,12 @@ func TestCartRemoveItem(t *testing.T) {
 			Owner: uuid.New(),
 			Items: map[uuid.UUID]CartItem{
 				productID: {
-					ID: productID,
+					ProductID: productID,
 					Qty:       2,
 					Price:     15000,
 				},
 				anotherProductID: {
-					ID: anotherProductID,
+					ProductID: anotherProductID,
 					Qty:       1,
 					Price:     5000,
 				},
@@ -240,7 +240,7 @@ func TestCartUpdateQuantity(t *testing.T) {
 			Owner: uuid.New(),
 			Items: map[uuid.UUID]CartItem{
 				productID: {
-					ID: productID,
+					ProductID: productID,
 					Qty:       2,
 					Price:     15000,
 				},
@@ -268,7 +268,7 @@ func TestCartUpdateQuantity(t *testing.T) {
 			Owner: uuid.New(),
 			Items: map[uuid.UUID]CartItem{
 				productID: {
-					ID: productID,
+					ProductID: productID,
 					Qty:       2,
 					Price:     15000,
 				},
@@ -329,12 +329,12 @@ func TestCartTotal(t *testing.T) {
 			Owner: uuid.New(),
 			Items: map[uuid.UUID]CartItem{
 				firstProductID: {
-					ID: firstProductID,
+					ProductID: firstProductID,
 					Qty:       2,
 					Price:     15000,
 				},
 				secondProductID: {
-					ID: secondProductID,
+					ProductID: secondProductID,
 					Qty:       3,
 					Price:     5000,
 				},
@@ -370,12 +370,12 @@ func TestCartListItem(t *testing.T) {
 			Owner: uuid.New(),
 			Items: map[uuid.UUID]CartItem{
 				firstProductID: {
-					ID: firstProductID,
+					ProductID: firstProductID,
 					Qty:       2,
 					Price:     15000,
 				},
 				secondProductID: {
-					ID: secondProductID,
+					ProductID: secondProductID,
 					Qty:       1,
 					Price:     5000,
 				},
@@ -390,7 +390,7 @@ func TestCartListItem(t *testing.T) {
 
 		foundItems := make(map[uuid.UUID]CartItem, len(items))
 		for _, item := range items {
-			foundItems[item.ID] = item
+			foundItems[item.ProductID] = item
 		}
 
 		if foundItems[firstProductID].Qty != 2 {
