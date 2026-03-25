@@ -2,6 +2,7 @@ package cart
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/google/uuid"
@@ -67,6 +68,34 @@ func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, product
 	}
 
 	resp := fmt.Sprintf("item %v had been removed from cart", productID.String())
+
+	return resp, nil
+}
+
+func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
+	item, err := toCartItem(itemReq)
+	if err != nil {
+		return "", err
+	}
+
+	cart, err := s.repo.Get(ctx, ownerID)
+	if err != nil {
+		fmt.Println("ERROR: ", err.Error())
+		return "", errors.New("cart not found")
+	}
+
+	_, ok := cart.Items[item.ProductID]
+	if ok {
+		if err := cart.UpdateQuantity(item.ProductID, item.Qty); err != nil {
+			return "", err
+		}
+	}
+
+	if err := s.repo.Save(ctx, cart); err != nil {
+		return "", err
+	}
+
+	resp := fmt.Sprintf("item %v quantity updated to: %v", item.ProductID.String(), item.Qty)
 
 	return resp, nil
 }
