@@ -31,11 +31,20 @@ func main() {
 	r.Post("/register", helper.Handle(application.UserHandler.Register))
 	r.Post("/login", helper.Handle(application.AuthHandler.Login))
 
-	// protected: khusus user
+	// protected: user
 	r.With(auth.AuthMiddleware).Get("/me", helper.Handle(application.AuthHandler.Me))
+
+	// protected: order
 	r.With(auth.AuthMiddleware).Get("/orders", helper.Handle(application.OrderHandler.ListOrders))
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
 	r.With(auth.AuthMiddleware).Post("/checkout", helper.Handle(application.OrderHandler.Checkout))
+
+	// protected: cart
+	r.With(auth.AuthMiddleware).Post("/cart", helper.Handle(application.CartHandler.AddItem))
+	r.With(auth.AuthMiddleware).Delete("/cart", helper.Handle(application.CartHandler.DeleteCart))
+	r.With(auth.AuthMiddleware).Delete("/cart/{product_id}", helper.Handle(application.CartHandler.RemoveItem))
+	r.With(auth.AuthMiddleware).Patch("/cart", helper.Handle(application.CartHandler.UpdateQuantity))
+	r.With(auth.AuthMiddleware).Get("/cart", helper.Handle(application.CartHandler.GetCart))
 
 	// Payments route
 	r.Route("/payments", func(r chi.Router) {
