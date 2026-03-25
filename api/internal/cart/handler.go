@@ -5,6 +5,7 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"github.com/go-chi/chi"
 	"github.com/google/uuid"
 )
 
@@ -51,11 +52,43 @@ func (h *Handler) DeleteCart(w http.ResponseWriter, r *http.Request) error {
 		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
 	}
 
-	resp, err := h.service.DeleteCart(ctx, userID)
+	ownerID, err := uuid.Parse(userID)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid user id")
+	}
+
+	resp, err := h.service.DeleteCart(ctx, ownerID)
 	if err != nil {
 		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
 	helper.WriteSuccess(w, http.StatusOK, resp)
 	return nil
+}
+
+func (h *Handler) RemoveItem(w http.ResponseWriter, r *http.Request) error {
+	productID, err := uuid.Parse(chi.URLParam(r, "product_id"))
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid product id")
+	}
+
+	ctx := r.Context()
+	userID, ok := auth.GetUserID(ctx)
+	if !ok {
+		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
+	}
+
+	ownerID, err := uuid.Parse(userID)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid user id")
+	}
+
+	resp, err := h.service.RemoveItem(ctx, ownerID, productID)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, resp)
+	return nil
+
 }

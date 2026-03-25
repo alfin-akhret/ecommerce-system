@@ -16,6 +16,52 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
+func TestCartGet(t *testing.T) {
+	t.Run("stores cart items in redis hash keyed by owner", func(t *testing.T) {
+		db := newTestRedisClient(t)
+		repo := CreateNewCartRepository(db)
+
+		ownerID := uuid.New()
+		firstProductID := uuid.New()
+		secondProductID := uuid.New()
+
+		cart := &Cart{
+			Owner: ownerID,
+			Items: map[uuid.UUID]CartItem{
+				firstProductID: {
+					ProductID: firstProductID,
+					Qty:       2,
+					Price:     15000,
+				},
+				secondProductID: {
+					ProductID: secondProductID,
+					Qty:       1,
+					Price:     5000,
+				},
+			},
+		}
+
+		ctx := context.Background()
+		if err := repo.Save(ctx, cart); err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		result, err := repo.Get(ctx, ownerID)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+
+		resultID := result.Items[firstProductID].ProductID
+		expectedID := cart.Items[firstProductID].ProductID
+
+		if resultID != expectedID {
+			t.Fatalf("expected stored item %+v, got %+v", expectedID, resultID)
+		}
+
+	})
+
+}
+
 func TestCartRepositorySave(t *testing.T) {
 	t.Run("stores cart items in redis hash keyed by owner", func(t *testing.T) {
 		db := newTestRedisClient(t)
