@@ -118,3 +118,24 @@ func (h *Handler) UpdateQuantity(w http.ResponseWriter, r *http.Request) error {
 	helper.WriteSuccess(w, http.StatusOK, resp)
 	return nil
 }
+
+func (h *Handler) GetCart(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+	userID, ok := auth.GetUserID(ctx)
+	if !ok {
+		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
+	}
+
+	ownerID, err := uuid.Parse(userID)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid user id")
+	}
+
+	resp, err := h.service.Get(ctx, ownerID)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, resp)
+	return nil
+}

@@ -24,3 +24,8 @@ func toCartItem(r AddCartItemRequest) (*CartItem, error) {
 		Price:     helper.ToCents(r.Price),
 	}, nil
 }
+
+type GetCartResponse struct {
+	Items      []CartItem `json:"items"`
+	TotalPrice float64    `json:"total_price"`
+}

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 )
 
@@ -80,7 +81,6 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
-		fmt.Println("ERROR: ", err.Error())
 		return "", errors.New("cart not found")
 	}
 
@@ -98,4 +98,21 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 	resp := fmt.Sprintf("item %v quantity updated to: %v", item.ProductID.String(), item.Qty)
 
 	return resp, nil
+}
+
+func (s *CartService) Get(ctx context.Context, ownerID uuid.UUID) (*GetCartResponse, error) {
+	cart, err := s.repo.Get(ctx, ownerID)
+	if err != nil {
+		return nil, errors.New("cart not found")
+	}
+
+	items := cart.ListItem()
+	totalPrice := cart.Total()
+
+	cartResponse := &GetCartResponse{
+		Items:      items,
+		TotalPrice: helper.ToFloat(totalPrice),
+	}
+
+	return cartResponse, nil
 }
