@@ -1,6 +1,9 @@
 package product
 
-import "github.com/google/uuid"
+import (
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"github.com/google/uuid"
+)
 
 type CreateProductRequest struct {
 	Name        string  `json:"name"`
@@ -21,7 +24,7 @@ func toProduct(r CreateProductRequest) *Product {
 		ID:          uuid.New(),
 		Name:        r.Name,
 		Description: r.Description,
-		Price:       r.Price,
+		Price:       helper.ToCents(r.Price),
 	}
 }
 
@@ -30,7 +33,7 @@ func toProductResponse(p *Product) *ProductResponse {
 		ID:          p.ID.String(),
 		Name:        p.Name,
 		Description: p.Description,
-		Price:       p.Price,
+		Price:       helper.ToFloat(p.Price),
 	}
 }
 
@@ -42,13 +45,13 @@ type ProductListItem struct {
 }
 
 type ProductDetailResponse struct {
-	ID          string  `json:"id"`
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	Stock       int     `json:"stock"`
-	Reserved    int     `json:"reserved"`
-	Available   int     `json:"available"`
+	ID          string `json:"id"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+	Price       int64  `json:"price"`
+	Stock       int    `json:"stock"`
+	Reserved    int    `json:"reserved"`
+	Available   int    `json:"available"`
 }
 
 type UpdateStockRequest struct {

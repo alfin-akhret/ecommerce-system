@@ -23,7 +23,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) error {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	resp, err := h.service.CreatePayment(r.Context(), req.OrderID, req.Amount, req.PaymentMethod)
+	resp, err := h.service.CreatePayment(r.Context(), req.OrderID, helper.ToCents(req.Amount), req.PaymentMethod)
 	if err != nil {
 		if errors.Is(err, ErrInvalidAmount) || errors.Is(err, ErrInvalidPaymentMethod) {
 			return helper.NewHTTPError(http.StatusBadRequest, err.Error())
@@ -153,7 +153,7 @@ func toPaymentResponse(payment *Payment) PaymentByIDResponse {
 	return PaymentByIDResponse{
 		ID:            payment.ID.String(),
 		OrderID:       payment.OrderID.String(),
-		Amount:        payment.Amount,
+		Amount:        helper.ToFloat(payment.Amount),
 		Status:        payment.Status,
 		PaymentMethod: payment.PaymentMethod,
 		PaidAt:        helper.FormatOptionalTime(payment.PaidAt),

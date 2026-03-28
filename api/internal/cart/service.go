@@ -106,11 +106,15 @@ func (s *CartService) Get(ctx context.Context, ownerID uuid.UUID) (*GetCartRespo
 		return nil, errors.New("cart not found")
 	}
 
-	items := cart.ListItem()
+	var cartItemsResponse []CartItemResponse
+	for _, item := range cart.Items {
+		cartItemsResponse = append(cartItemsResponse, toCartItemResponse(&item))
+	}
+
 	totalPrice := cart.Total()
 
 	cartResponse := &GetCartResponse{
-		Items:      items,
+		Items:      cartItemsResponse,
 		TotalPrice: helper.ToFloat(totalPrice),
 	}
 

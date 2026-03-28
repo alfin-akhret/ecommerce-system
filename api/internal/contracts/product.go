@@ -9,7 +9,7 @@ import (
 
 type ProductView interface {
 	GetID() uuid.UUID
-	GetPrice() float64
+	GetPrice() int64
 }
 
 type ProductUpdater interface {

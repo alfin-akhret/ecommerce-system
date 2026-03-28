@@ -14,5 +14,5 @@ type PaymentCreateResult struct {
 }
 
 type PaymentUpdater interface {
-	CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, method string) (*PaymentCreateResult, error)
+	CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount int64, method string) (*PaymentCreateResult, error)
 }

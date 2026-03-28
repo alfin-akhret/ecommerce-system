@@ -1,0 +1,6 @@
+ALTER TABLE orders
+ALTER COLUMN total_amount TYPE DOUBLE PRECISION
+USING (total_amount/ 100.0);
+
+ALTER TABLE orders
+ALTER COLUMN total_amount SET NOT NULL;
