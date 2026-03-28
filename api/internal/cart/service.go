@@ -5,34 +5,51 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 )
 
 type CartService struct {
-	repo CartUpdater
+	repo    CartUpdater
+	product contracts.ProductGetter
 }
 
-func NewCartService(repo CartUpdater) *CartService {
+func NewCartService(repo CartUpdater, product contracts.ProductGetter) *CartService {
 	return &CartService{
-		repo: repo,
+		repo:    repo,
+		product: product,
 	}
 }
 
+var ErrCartNotFound = errors.New("cart not found")
+
 func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
 
-	cartItem, err := toCartItem(itemReq)
+	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
 		return "", err
 	}
 
-	cart, _ := s.repo.Get(ctx, ownerID)
-
-	if cart == nil {
-		cart, err = NewCart(ownerID)
-		if err != nil {
+	cart, err := s.repo.Get(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, ErrCartNotFound) {
+			cart, _ = NewCart(ownerID)
+		} else {
 			return "", err
 		}
+	}
+
+	// get product price
+	product, err := s.product.GetProductPrice(ctx, pid.String())
+	if err != nil {
+		return "", err
+	}
+
+	cartItem := &CartItem{
+		ProductID: pid,
+		Qty:       qty,
+		Price:     product.GetPrice(),
 	}
 
 	if err := cart.AddItem(cartItem.ProductID, cartItem.Qty, cartItem.Price); err != nil {
@@ -74,7 +91,7 @@ func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, product
 }
 
 func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
-	item, err := toCartItem(itemReq)
+	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
 		return "", err
 	}
@@ -84,18 +101,15 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 		return "", errors.New("cart not found")
 	}
 
-	_, ok := cart.Items[item.ProductID]
-	if ok {
-		if err := cart.UpdateQuantity(item.ProductID, item.Qty); err != nil {
-			return "", err
-		}
+	if err := cart.UpdateQuantity(pid, qty); err != nil {
+		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
 		return "", err
 	}
 
-	resp := fmt.Sprintf("item %v quantity updated to: %v", item.ProductID.String(), item.Qty)
+	resp := fmt.Sprintf("item %v quantity updated to: %v", pid.String(), qty)
 
 	return resp, nil
 }

@@ -6,23 +6,18 @@ import (
 )
 
 type AddCartItemRequest struct {
-	ProductID string  `json:"product_id"`
-	Qty       int     `json:"qty"`
-	Price     float64 `json:"price"`
+	ProductID string `json:"product_id"`
+	Qty       int    `json:"qty"`
 }
 
-func toCartItem(r AddCartItemRequest) (*CartItem, error) {
+func parseCartItemRequest(r AddCartItemRequest) (uuid.UUID, int, error) {
 	pid, err := uuid.Parse(r.ProductID)
 	if err != nil {
-		return nil, err
+		return uuid.Nil, 0, err
 
 	}
 
-	return &CartItem{
-		ProductID: pid,
-		Qty:       r.Qty,
-		Price:     helper.ToCents(r.Price),
-	}, nil
+	return pid, r.Qty, nil
 }
 
 type CartItemResponse struct {

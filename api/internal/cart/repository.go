@@ -3,6 +3,8 @@ package cart
 import (
 	"context"
 	"encoding/json"
+	"errors"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -14,6 +16,9 @@ type CartUpdater interface {
 	Save(ctx context.Context, cart *Cart) error
 	Delete(ctx context.Context, ownerID uuid.UUID) error
 }
+
+// cart retention, this temporary, should be move to env vars.
+var retention time.Duration = 24 * time.Hour
 
 type CartRepository struct {
 	db *redis.Client
@@ -29,6 +34,9 @@ func (c *CartRepository) Get(ctx context.Context, ownerID uuid.UUID) (*Cart, err
 	key := "cart:" + ownerID.String()
 	storedItems, err := c.db.Get(ctx, key).Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, ErrCartNotFound
+		}
 		return nil, err
 	}
 
@@ -49,7 +57,7 @@ func (c *CartRepository) Save(ctx context.Context, cart *Cart) error {
 		return err
 	}
 
-	if err := c.db.Set(ctx, key, payload, 0).Err(); err != nil {
+	if err := c.db.Set(ctx, key, payload, retention).Err(); err != nil {
 		return err
 	}
 

@@ -61,7 +61,7 @@ func New() (*App, error) {
 
 	// cart
 	cartRepo := cart.CreateNewCartRepository(rdb)
-	cartService := cart.NewCartService(cartRepo)
+	cartService := cart.NewCartService(cartRepo, productService)
 	cartHandler := cart.NewHandler(cartService)
 
 	// publisher (sementara simple dulu)

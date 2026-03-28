@@ -89,6 +89,7 @@ func (c *Cart) AddItem(productID uuid.UUID, qty int, price int64) error {
 	item, ok := c.Items[productID]
 	if ok {
 		item.Qty += qty
+		item.Price = price
 	} else {
 		item = CartItem{
 			ProductID: productID,
