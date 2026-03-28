@@ -26,7 +26,7 @@ var ErrCartNotFound = errors.New("cart not found")
 
 func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
 
-	cartItem, err := toCartItem(itemReq)
+	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
 		return "", err
 	}
@@ -40,12 +40,17 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 		}
 	}
 
-	// get newest product price
-	product, err := s.product.GetProductPrice(ctx, cartItem.ProductID.String())
+	// get product price
+	product, err := s.product.GetProductPrice(ctx, pid.String())
 	if err != nil {
 		return "", err
 	}
-	cartItem.Price = product.GetPrice()
+
+	cartItem := &CartItem{
+		ProductID: pid,
+		Qty:       qty,
+		Price:     product.GetPrice(),
+	}
 
 	if err := cart.AddItem(cartItem.ProductID, cartItem.Qty, cartItem.Price); err != nil {
 		return "", err
@@ -86,7 +91,7 @@ func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, product
 }
 
 func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
-	item, err := toCartItem(itemReq)
+	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
 		return "", err
 	}
@@ -96,18 +101,15 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 		return "", errors.New("cart not found")
 	}
 
-	_, ok := cart.Items[item.ProductID]
-	if ok {
-		if err := cart.UpdateQuantity(item.ProductID, item.Qty); err != nil {
-			return "", err
-		}
+	if err := cart.UpdateQuantity(pid, qty); err != nil {
+		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
 		return "", err
 	}
 
-	resp := fmt.Sprintf("item %v quantity updated to: %v", item.ProductID.String(), item.Qty)
+	resp := fmt.Sprintf("item %v quantity updated to: %v", pid.String(), qty)
 
 	return resp, nil
 }

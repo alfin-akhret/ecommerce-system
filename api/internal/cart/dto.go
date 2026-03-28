@@ -10,17 +10,14 @@ type AddCartItemRequest struct {
 	Qty       int    `json:"qty"`
 }
 
-func toCartItem(r AddCartItemRequest) (*CartItem, error) {
+func parseCartItemRequest(r AddCartItemRequest) (uuid.UUID, int, error) {
 	pid, err := uuid.Parse(r.ProductID)
 	if err != nil {
-		return nil, err
+		return uuid.Nil, 0, err
 
 	}
 
-	return &CartItem{
-		ProductID: pid,
-		Qty:       r.Qty,
-	}, nil
+	return pid, r.Qty, nil
 }
 
 type CartItemResponse struct {
