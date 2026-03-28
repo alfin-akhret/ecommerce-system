@@ -3,6 +3,7 @@ package cart
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
@@ -29,6 +30,9 @@ func (c *CartRepository) Get(ctx context.Context, ownerID uuid.UUID) (*Cart, err
 	key := "cart:" + ownerID.String()
 	storedItems, err := c.db.Get(ctx, key).Result()
 	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return nil, ErrCartNotFound
+		}
 		return nil, err
 	}
 

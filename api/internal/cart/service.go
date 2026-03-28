@@ -22,6 +22,8 @@ func NewCartService(repo CartUpdater, product contracts.ProductGetter) *CartServ
 	}
 }
 
+var ErrCartNotFound = errors.New("cart not found")
+
 func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
 
 	cartItem, err := toCartItem(itemReq)
@@ -29,7 +31,14 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 		return "", err
 	}
 
-	cart, _ := s.repo.Get(ctx, ownerID)
+	cart, err := s.repo.Get(ctx, ownerID)
+	if err != nil {
+		if errors.Is(err, ErrCartNotFound) {
+			cart, _ = NewCart(ownerID)
+		} else {
+			return "", err
+		}
+	}
 
 	// get newest product price
 	product, err := s.product.GetProductPrice(ctx, cartItem.ProductID.String())
@@ -37,13 +46,6 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 		return "", err
 	}
 	cartItem.Price = product.GetPrice()
-
-	if cart == nil {
-		cart, err = NewCart(ownerID)
-		if err != nil {
-			return "", err
-		}
-	}
 
 	if err := cart.AddItem(cartItem.ProductID, cartItem.Qty, cartItem.Price); err != nil {
 		return "", err
