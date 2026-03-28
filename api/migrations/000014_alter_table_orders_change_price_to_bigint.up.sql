@@ -1,0 +1,6 @@
+ALTER TABLE orders
+ALTER COLUMN total_amount TYPE BIGINT
+USING ROUND(total_amount * 100);
+
+ALTER TABLE orders
+ALTER COLUMN total_amount SET NOT NULL;

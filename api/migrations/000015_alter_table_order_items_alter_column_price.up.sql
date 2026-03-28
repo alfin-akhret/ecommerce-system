@@ -1,0 +1,6 @@
+ALTER TABLE order_items
+ALTER COLUMN price TYPE BIGINT
+USING ROUND(price * 100);
+
+ALTER TABLE order_items
+ALTER COLUMN price SET NOT NULL;

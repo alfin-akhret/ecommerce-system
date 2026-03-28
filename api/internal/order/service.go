@@ -45,7 +45,7 @@ func (s *Service) ListOrders(ctx context.Context, userID string) ([]OrderListIte
 		items = append(items, OrderListItem{
 			ID:          o.ID.String(),
 			Status:      o.Status,
-			TotalAmount: o.TotalAmount,
+			TotalAmount: helper.ToFloat(o.TotalAmount),
 			CreatedAt:   o.CreatedAt.UTC().Format(time.RFC3339),
 		})
 	}
@@ -72,7 +72,7 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 		items = append(items, OrderItemResponse{
 			ID:        item.ID.String(),
 			ProductID: item.ProductID.String(),
-			Price:     item.Price,
+			Price:     helper.ToFloat(item.Price),
 			Qty:       item.Qty,
 		})
 	}
@@ -81,7 +81,7 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 		ID:          order.ID.String(),
 		UserID:      order.UserID.String(),
 		Status:      order.Status,
-		TotalAmount: order.TotalAmount,
+		TotalAmount: helper.ToFloat(order.TotalAmount),
 		CreatedAt:   order.CreatedAt.UTC().Format(time.RFC3339),
 		Items:       items,
 	}, nil
@@ -111,7 +111,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		Status: "PENDING",
 	}
 
-	var total float64
+	var total int64
 	var orderItems []*OrderItem
 
 	for _, item := range req.Items {
@@ -125,7 +125,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		}
 
 		itemQty := item.Quantity
-		subtotal := product.GetPrice() * float64(itemQty)
+		subtotal := product.GetPrice() * int64(itemQty)
 		total += subtotal
 
 		// parse product ID
@@ -163,7 +163,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 
 	return &CheckoutResponse{
 		OrderID:     order.ID.String(),
-		TotalAmount: total,
+		TotalAmount: helper.ToFloat(total),
 		PaymentURL:  paymentResp.PaymentURL,
 		ExpiredAt:   helper.FormatOptionalTime(paymentResp.ExpiredAt),
 	}, nil

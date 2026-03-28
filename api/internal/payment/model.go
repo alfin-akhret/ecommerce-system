@@ -9,7 +9,7 @@ import (
 type Payment struct {
 	ID            uuid.UUID  `json:"id"`
 	OrderID       uuid.UUID  `json:"order_id"`
-	Amount        float64    `json:"amount"`
+	Amount        int64      `json:"amount"`
 	Status        string     `json:"status"`
 	PaymentMethod string     `json:"payment_method"`
 	PaidAt        *time.Time `json:"paid_at,omitempty"`

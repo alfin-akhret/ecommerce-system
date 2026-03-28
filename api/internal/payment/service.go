@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -47,11 +48,11 @@ func (s *Service) SetOrderStatusUpdater(updater contracts.OrderUpdater) {
 }
 
 // Create payment (return DTO with payment URL)
-func (s *Service) CreatePayment(ctx context.Context, orderID string, amount float64, paymentMethod string) (*CreatePaymentResponse, error) {
+func (s *Service) CreatePayment(ctx context.Context, orderID string, amount int64, paymentMethod string) (*CreatePaymentResponse, error) {
 	return s.createPayment(ctx, s.repo, orderID, amount, paymentMethod)
 }
 
-func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount float64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount int64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
 	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
 	if err != nil {
 		return nil, err
@@ -85,7 +86,7 @@ func (s *Service) GetPaymentByOrderID(ctx context.Context, orderID string) (*Pay
 	return s.repo.GetByOrderID(ctx, orderID)
 }
 
-func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID string, amount float64, paymentMethod string) (*CreatePaymentResponse, error) {
+func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID string, amount int64, paymentMethod string) (*CreatePaymentResponse, error) {
 	if amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
@@ -120,7 +121,7 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 		ID:            paymentID.String(),
 		OrderID:       orderID,
 		Status:        p.Status,
-		Amount:        amount,
+		Amount:        helper.ToFloat(amount),
 		PaymentMethod: paymentMethod,
 		PaymentURL:    paymentURL,
 		CreatedAt:     p.CreatedAt,
