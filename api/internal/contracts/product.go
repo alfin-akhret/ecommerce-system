@@ -18,3 +18,7 @@ type ProductUpdater interface {
 	ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
 	ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error
 }
+
+type ProductGetter interface {
+	GetProductPrice(ctx context.Context, productID string) (ProductView, error)
+}

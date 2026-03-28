@@ -70,6 +70,17 @@ func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetail
 	return s.repo.GetProductByID(ctx, id)
 }
 
+func (s *Service) GetProductPrice(ctx context.Context, id string) (contracts.ProductView, error) {
+	detail, err := s.repo.GetProductByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Product{
+		Price: detail.Price,
+	}, nil
+}
+
 func (s *Service) GetProductByIDWithTx(ctx context.Context, tx pgx.Tx, id string) (contracts.ProductView, error) {
 	repo := s.repo.WithTx(tx)
 	detail, err := repo.GetProductByID(ctx, id)

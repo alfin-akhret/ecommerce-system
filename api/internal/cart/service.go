@@ -5,17 +5,20 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 )
 
 type CartService struct {
-	repo CartUpdater
+	repo    CartUpdater
+	product contracts.ProductGetter
 }
 
-func NewCartService(repo CartUpdater) *CartService {
+func NewCartService(repo CartUpdater, product contracts.ProductGetter) *CartService {
 	return &CartService{
-		repo: repo,
+		repo:    repo,
+		product: product,
 	}
 }
 
@@ -27,6 +30,13 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 	}
 
 	cart, _ := s.repo.Get(ctx, ownerID)
+
+	// get newest product price
+	product, err := s.product.GetProductPrice(ctx, cartItem.ProductID.String())
+	if err != nil {
+		return "", err
+	}
+	cartItem.Price = product.GetPrice()
 
 	if cart == nil {
 		cart, err = NewCart(ownerID)

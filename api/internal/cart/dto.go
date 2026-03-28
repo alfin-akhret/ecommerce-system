@@ -6,9 +6,8 @@ import (
 )
 
 type AddCartItemRequest struct {
-	ProductID string  `json:"product_id"`
-	Qty       int     `json:"qty"`
-	Price     float64 `json:"price"`
+	ProductID string `json:"product_id"`
+	Qty       int    `json:"qty"`
 }
 
 func toCartItem(r AddCartItemRequest) (*CartItem, error) {
@@ -21,7 +20,6 @@ func toCartItem(r AddCartItemRequest) (*CartItem, error) {
 	return &CartItem{
 		ProductID: pid,
 		Qty:       r.Qty,
-		Price:     helper.ToCents(r.Price),
 	}, nil
 }
 
