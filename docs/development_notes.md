@@ -8,6 +8,7 @@ Other options (if we don't want to make an actual call to redis):
 2. use in-memory mock servers (eg: miniredis, minisentinel)
 
 TODO: 
-- set cart TTL: 24 hours
-- change all price to int64, including in DB
-- add engineering notes: topic: price data type
+- ~~set cart TTL: 24 hours~~
+- ~~change all price to int64, including in DB~~
+- ~~add engineering notes: topic: price data type~~
+- CreateOrder flow , integrate with cart and checkout.

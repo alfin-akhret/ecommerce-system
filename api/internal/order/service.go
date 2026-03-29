@@ -19,10 +19,16 @@ type Service struct {
 	db             *pgxpool.Pool
 	repo           *Repository
 	productUpdater contracts.ProductUpdater
+	productGetter  contracts.ProductGetter
 	paymentUpdater contracts.PaymentUpdater
+	cartGetter     contracts.CartGetter
 }
 
-func NewService(db *pgxpool.Pool, productUpdater contracts.ProductUpdater, paymentUpdater contracts.PaymentUpdater) *Service {
+func NewService(db *pgxpool.Pool,
+	productUpdater contracts.ProductUpdater,
+	productGetter contracts.ProductGetter,
+	paymentUpdater contracts.PaymentUpdater,
+	cartGetter contracts.CartGetter) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -30,7 +36,9 @@ func NewService(db *pgxpool.Pool, productUpdater contracts.ProductUpdater, payme
 		db:             db,
 		repo:           repo,
 		productUpdater: productUpdater,
+		productGetter:  productGetter,
 		paymentUpdater: paymentUpdater,
+		cartGetter:     cartGetter,
 	}
 }
 
@@ -87,7 +95,7 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 	}, nil
 }
 
-func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutRequest) (*CheckoutResponse, error) {
+func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
 	// begin transaction
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -161,7 +169,7 @@ func (s *Service) Checkout(ctx context.Context, userID string, req CheckoutReque
 		return nil, err
 	}
 
-	return &CheckoutResponse{
+	return &CreateOrderResponse{
 		OrderID:     order.ID.String(),
 		TotalAmount: helper.ToFloat(total),
 		PaymentURL:  paymentResp.PaymentURL,
@@ -241,4 +249,47 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 		return
 	}
 
+}
+
+func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutResponse, error) {
+
+	// 1. get cart from cart domain
+	ownerID, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	cartItems, err := s.cartGetter.GetCart(ctx, ownerID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 2. get updated price from product domain
+	// todo: batch fetch product prices
+	coResp := &CheckoutResponse{}
+	totalAmount := int64(0)
+	for _, item := range cartItems {
+		coItem := CheckoutItem{}
+
+		product, err := s.productGetter.GetProductPrice(ctx, item.ProductID.String())
+		if err != nil {
+			return nil, err
+		}
+
+		coItem.ProductID = item.ProductID.String()
+		coItem.Price = helper.ToFloat(product.GetPrice())
+		coItem.Qty = item.Qty
+
+		coResp.Items = append(coResp.Items, coItem)
+
+		totalAmount += product.GetPrice()
+	}
+
+	coResp.TotalAmount = helper.ToFloat(totalAmount)
+	coResp.GrandTotal = helper.ToFloat(totalAmount)
+	coResp.PaymentMethod = "" // temp hardcoded, should implemen later
+	coResp.Shipping = nil     // temp hardcoded, should implemen later
+	coResp.Promo = nil        // temp hardcoded, should implemen later
+
+	return coResp, nil
 }

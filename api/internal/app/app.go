@@ -48,21 +48,21 @@ func New() (*App, error) {
 	productService := product.NewService(db)
 	productHandler := product.NewHandler(productService)
 
+	// cart
+	cartRepo := cart.CreateNewCartRepository(rdb)
+	cartService := cart.NewCartService(cartRepo, productService)
+	cartHandler := cart.NewHandler(cartService)
+
 	// payment
 	paymentService := payment.NewService(db)
 
 	// order
-	orderService := order.NewService(db, productService, paymentService)
+	orderService := order.NewService(db, productService, productService, paymentService, cartService)
 	orderHandler := order.NewHandler(orderService)
 
 	paymentService.SetOrderStatusUpdater(orderService)
 
 	paymentHandler := payment.NewHandler(paymentService)
-
-	// cart
-	cartRepo := cart.CreateNewCartRepository(rdb)
-	cartService := cart.NewCartService(cartRepo, productService)
-	cartHandler := cart.NewHandler(cartService)
 
 	// publisher (sementara simple dulu)
 	eventPublisher := payment.NewInMemoryPublisher()

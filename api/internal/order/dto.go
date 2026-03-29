@@ -23,19 +23,47 @@ type OrderResponse struct {
 	Items       []OrderItemResponse `json:"items"`
 }
 
-type CheckoutItem struct {
+type CreateOrderItem struct {
 	ProductID string `json:"product_id"`
 	Quantity  int    `json:"quantity"`
 }
 
-type CheckoutRequest struct {
-	Items         []CheckoutItem `json:"items"`
-	PaymentMethod string         `json:"payment_method"`
+type CreateOrderRequest struct {
+	Items         []CreateOrderItem `json:"items"`
+	PaymentMethod string            `json:"payment_method"`
 }
 
-type CheckoutResponse struct {
+type CreateOrderResponse struct {
 	OrderID     string  `json:"order_id"`
 	TotalAmount float64 `json:"total_amount"`
 	PaymentURL  string  `json:"payment_url"`
 	ExpiredAt   *string `json:"expired_at"`
+}
+
+// CHECKOUT DTO
+type CheckoutResponse struct {
+	Items         []CheckoutItem `json:"items"`
+	TotalAmount   float64        `json:"total_amount"`
+	GrandTotal    float64        `json:"grand_total"`
+	PaymentMethod string         `json:"payment_method"`
+	Shipping      *ShippingInfo  `json:"shipping"`
+	Promo         *PromoInfo     `json:"promo"`
+}
+
+type CheckoutItem struct {
+	ProductID string `json:"product_id"`
+	// Name      string  `json:"name"`
+	Price float64 `json:"price"`
+	Qty   int     `json:"qty"`
+}
+
+type ShippingInfo struct {
+	Method  string  `json:"method"`
+	Address string  `json:"address"`
+	Cost    float64 `json:"cost"`
+}
+
+type PromoInfo struct {
+	Code   string  `json:"code"`
+	Amount float64 `json:"amount"`
 }

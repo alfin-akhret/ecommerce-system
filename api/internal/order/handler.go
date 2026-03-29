@@ -56,18 +56,33 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) error {
 	return nil
 }
 
+func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
+	userID, ok := auth.GetUserID(r.Context())
+	if !ok {
+		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
+	}
+
+	var req CreateOrderRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	resp, err := h.service.CreateOrder(r.Context(), userID, req)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	helper.WriteSuccess(w, http.StatusOK, resp)
+	return nil
+}
+
 func (h *Handler) Checkout(w http.ResponseWriter, r *http.Request) error {
 	userID, ok := auth.GetUserID(r.Context())
 	if !ok {
 		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
 	}
 
-	var req CheckoutRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
-	}
-
-	resp, err := h.service.Checkout(r.Context(), userID, req)
+	resp, err := h.service.Checkout(r.Context(), userID)
 	if err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
