@@ -276,6 +276,11 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		return nil, err
 	}
 
+	// remove cart
+	if _, err := s.cartGetter.DeleteCart(ctx, uid); err != nil {
+		return nil, err
+	}
+
 	// create order response
 	orderRespnse := &CreateOrderResponse{
 		OrderID:     orderID.String(),
