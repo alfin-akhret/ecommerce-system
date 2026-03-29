@@ -20,5 +20,6 @@ type ProductUpdater interface {
 }
 
 type ProductGetter interface {
+	// todo: productID param should be in UUID
 	GetProductPrice(ctx context.Context, productID string) (ProductView, error)
 }

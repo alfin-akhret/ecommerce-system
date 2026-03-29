@@ -117,7 +117,7 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 func (s *CartService) Get(ctx context.Context, ownerID uuid.UUID) (*GetCartResponse, error) {
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
-		return nil, errors.New("cart not found")
+		return nil, ErrCartNotFound
 	}
 
 	var cartItemsResponse []CartItemResponse
@@ -133,4 +133,21 @@ func (s *CartService) Get(ctx context.Context, ownerID uuid.UUID) (*GetCartRespo
 	}
 
 	return cartResponse, nil
+}
+
+func (s *CartService) GetCart(ctx context.Context, ownerID uuid.UUID) ([]contracts.CartItem, error) {
+	cart, err := s.repo.Get(ctx, ownerID)
+	if err != nil {
+		return nil, ErrCartNotFound
+	}
+
+	var cartItems []contracts.CartItem
+	for _, val := range cart.Items {
+		cartItems = append(cartItems, contracts.CartItem{
+			ProductID: val.ProductID,
+			Qty:       val.Qty,
+		})
+	}
+
+	return cartItems, nil
 }

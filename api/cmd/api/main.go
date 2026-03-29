@@ -37,7 +37,8 @@ func main() {
 	// protected: order
 	r.With(auth.AuthMiddleware).Get("/orders", helper.Handle(application.OrderHandler.ListOrders))
 	r.With(auth.AuthMiddleware).Get("/orders/{id}", helper.Handle(application.OrderHandler.GetOrder))
-	r.With(auth.AuthMiddleware).Post("/checkout", helper.Handle(application.OrderHandler.Checkout))
+	r.With(auth.AuthMiddleware).Post("/create", helper.Handle(application.OrderHandler.CreateOrder))
+	r.With(auth.AuthMiddleware).Get("/checkout", helper.Handle(application.OrderHandler.Checkout))
 
 	// protected: cart
 	r.With(auth.AuthMiddleware).Post("/cart", helper.Handle(application.CartHandler.AddItem))
