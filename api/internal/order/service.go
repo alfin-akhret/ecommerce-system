@@ -216,7 +216,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	if err != nil {
 		return nil, err
 	}
-	defer s.db.Close()
+	defer tx.Rollback(ctx)
 
 	repo := s.repo.WithTx(tx)
 
