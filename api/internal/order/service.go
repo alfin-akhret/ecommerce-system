@@ -16,29 +16,26 @@ import (
 var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
-	db             *pgxpool.Pool
-	repo           *Repository
-	productUpdater contracts.ProductUpdater
-	productGetter  contracts.ProductGetter
-	paymentUpdater contracts.PaymentUpdater
-	cartGetter     contracts.CartGetter
+	db      *pgxpool.Pool
+	repo    *Repository
+	product contracts.ProductManager
+	payment contracts.PaymentManager
+	cart    contracts.CartManager
 }
 
 func NewService(db *pgxpool.Pool,
-	productUpdater contracts.ProductUpdater,
-	productGetter contracts.ProductGetter,
-	paymentUpdater contracts.PaymentUpdater,
-	cartGetter contracts.CartGetter) *Service {
+	product contracts.ProductManager,
+	payment contracts.PaymentManager,
+	cart contracts.CartManager) *Service {
 
 	repo := NewOrderRepository(db)
 
 	return &Service{
-		db:             db,
-		repo:           repo,
-		productUpdater: productUpdater,
-		productGetter:  productGetter,
-		paymentUpdater: paymentUpdater,
-		cartGetter:     cartGetter,
+		db:      db,
+		repo:    repo,
+		product: product,
+		payment: payment,
+		cart:    cart,
 	}
 }
 
@@ -111,7 +108,7 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	for _, item := range items {
-		if err := s.productUpdater.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
+		if err := s.product.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
 			return err
 		}
 	}
@@ -128,7 +125,7 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	for _, item := range items {
-		if err := s.productUpdater.ReleaseStockWithTx(
+		if err := s.product.ReleaseStockWithTx(
 			ctx,
 			tx,
 			item.ProductID.String(),
@@ -175,7 +172,7 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 		return nil, err
 	}
 
-	cartData, err := s.cartGetter.GetCart(ctx, ownerID)
+	cartData, err := s.cart.GetCart(ctx, ownerID)
 	if err != nil {
 		return nil, err
 	}
@@ -184,7 +181,7 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 	for _, val := range cartData {
 
 		// get latest price from product
-		product, err := s.productGetter.GetProductPrice(ctx, val.ProductID.String())
+		product, err := s.product.GetProductPrice(ctx, val.ProductID.String())
 		if err != nil {
 			return nil, err
 		}
@@ -244,7 +241,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 
 	for _, item := range cart.Items {
 		// reserve stock
-		err := s.productUpdater.ReserveStockWithTx(ctx, tx, item.ProductID.String(), item.Qty)
+		err := s.product.ReserveStockWithTx(ctx, tx, item.ProductID.String(), item.Qty)
 		if err != nil {
 			return nil, err
 		}
@@ -266,7 +263,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 
 	// create payment
-	paymentResult, err := s.paymentUpdater.CreatePaymentWithTx(ctx, tx, orderID.String(), order.TotalAmount, req.PaymentMethod)
+	paymentResult, err := s.payment.CreatePaymentWithTx(ctx, tx, orderID.String(), order.TotalAmount, req.PaymentMethod)
 	if err != nil {
 		return nil, err
 	}
@@ -277,7 +274,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 
 	// remove cart
-	if _, err := s.cartGetter.DeleteCart(ctx, uid); err != nil {
+	if _, err := s.cart.DeleteCart(ctx, uid); err != nil {
 		return nil, err
 	}
 
