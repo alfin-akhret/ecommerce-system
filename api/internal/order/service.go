@@ -16,29 +16,26 @@ import (
 var ErrOrderNotFound = errors.New("order not found")
 
 type Service struct {
-	db             *pgxpool.Pool
-	repo           *Repository
-	productUpdater contracts.ProductUpdater
-	productGetter  contracts.ProductGetter
-	paymentUpdater contracts.PaymentUpdater
-	cartGetter     contracts.CartGetter
+	db      *pgxpool.Pool
+	repo    *Repository
+	product contracts.ProductManager
+	payment contracts.PaymentManager
+	cart    contracts.CartManager
 }
 
 func NewService(db *pgxpool.Pool,
-	productUpdater contracts.ProductUpdater,
-	productGetter contracts.ProductGetter,
-	paymentUpdater contracts.PaymentUpdater,
-	cartGetter contracts.CartGetter) *Service {
+	product contracts.ProductManager,
+	payment contracts.PaymentManager,
+	cart contracts.CartManager) *Service {
 
 	repo := NewOrderRepository(db)
 
 	return &Service{
-		db:             db,
-		repo:           repo,
-		productUpdater: productUpdater,
-		productGetter:  productGetter,
-		paymentUpdater: paymentUpdater,
-		cartGetter:     cartGetter,
+		db:      db,
+		repo:    repo,
+		product: product,
+		payment: payment,
+		cart:    cart,
 	}
 }
 
@@ -95,88 +92,6 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 	}, nil
 }
 
-func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
-	// begin transaction
-	tx, err := s.db.Begin(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback(ctx)
-
-	// create orderRepo with transaction
-	orderRepo := s.repo.WithTx(tx)
-
-	// parse userID
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		return nil, err
-	}
-
-	// create new order object
-	order := &Order{
-		ID:     uuid.New(),
-		UserID: userUUID,
-		Status: "PENDING",
-	}
-
-	var total int64
-	var orderItems []*OrderItem
-
-	for _, item := range req.Items {
-		product, err := s.productUpdater.GetProductByIDWithTx(ctx, tx, item.ProductID)
-		if err != nil {
-			return nil, err
-		}
-
-		if err := s.productUpdater.ReserveStockWithTx(ctx, tx, item.ProductID, item.Quantity); err != nil {
-			return nil, err
-		}
-
-		itemQty := item.Quantity
-		subtotal := product.GetPrice() * int64(itemQty)
-		total += subtotal
-
-		// parse product ID
-		OrderItem := &OrderItem{
-			ID:        uuid.New(),
-			OrderID:   order.ID,
-			ProductID: product.GetID(),
-			Price:     product.GetPrice(),
-			Qty:       itemQty,
-		}
-
-		orderItems = append(orderItems, OrderItem)
-	}
-
-	order.TotalAmount = total
-
-	if err := orderRepo.CreateOrder(ctx, order); err != nil {
-		return nil, err
-	}
-
-	paymentResp, err := s.paymentUpdater.CreatePaymentWithTx(ctx, tx, order.ID.String(), total, req.PaymentMethod)
-	if err != nil {
-		return nil, err
-	}
-
-	for _, orderItem := range orderItems {
-		if err := orderRepo.CreateOrderItem(ctx, orderItem); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := tx.Commit(ctx); err != nil {
-		return nil, err
-	}
-
-	return &CreateOrderResponse{
-		OrderID:     order.ID.String(),
-		TotalAmount: helper.ToFloat(total),
-		PaymentURL:  paymentResp.PaymentURL,
-		ExpiredAt:   helper.FormatOptionalTime(paymentResp.ExpiredAt),
-	}, nil
-}
-
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
 	repo := s.repo.WithTx(tx)
 	return repo.UpdateOrderStatus(ctx, orderID, status)
@@ -193,7 +108,7 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	for _, item := range items {
-		if err := s.productUpdater.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
+		if err := s.product.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
 			return err
 		}
 	}
@@ -210,7 +125,7 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	for _, item := range items {
-		if err := s.productUpdater.ReleaseStockWithTx(
+		if err := s.product.ReleaseStockWithTx(
 			ctx,
 			tx,
 			item.ProductID.String(),
@@ -251,42 +166,148 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 
 }
 
-func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutResponse, error) {
-
-	// 1. get cart from cart domain
+func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 	ownerID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	cartItems, err := s.cartGetter.GetCart(ctx, ownerID)
+	cartData, err := s.cart.GetCart(ctx, ownerID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 2. get updated price from product domain
-	// todo: batch fetch product prices
-	coResp := &CheckoutResponse{}
-	totalAmount := int64(0)
-	for _, item := range cartItems {
-		coItem := CheckoutItem{}
+	cart := &Cart{}
+	for _, val := range cartData {
 
-		product, err := s.productGetter.GetProductPrice(ctx, item.ProductID.String())
+		// get latest price from product
+		product, err := s.product.GetProductPrice(ctx, val.ProductID.String())
 		if err != nil {
 			return nil, err
 		}
 
-		coItem.ProductID = item.ProductID.String()
-		coItem.Price = helper.ToFloat(product.GetPrice())
-		coItem.Qty = item.Qty
+		cartItem := CartItem{
+			ProductID: val.ProductID,
+			Qty:       val.Qty,
+			Price:     product.GetPrice(),
+		}
 
-		coResp.Items = append(coResp.Items, coItem)
-
-		totalAmount += product.GetPrice()
+		cart.Items = append(cart.Items, cartItem)
+		cart.TotalAmount += product.GetPrice() * int64(val.Qty)
 	}
 
-	coResp.TotalAmount = helper.ToFloat(totalAmount)
-	coResp.GrandTotal = helper.ToFloat(totalAmount)
+	return cart, nil
+
+}
+
+func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
+	// 1. get cart
+
+	cart, err := s.getCart(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// start DB transaction
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	repo := s.repo.WithTx(tx)
+
+	// create order
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+
+	orderID := uuid.New()
+
+	order := &Order{
+		ID:          orderID,
+		UserID:      uid,
+		Status:      OrderStatusPending,
+		TotalAmount: cart.TotalAmount,
+		CreatedAt:   now,
+	}
+
+	if err := repo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	for _, item := range cart.Items {
+		// reserve stock
+		err := s.product.ReserveStockWithTx(ctx, tx, item.ProductID.String(), item.Qty)
+		if err != nil {
+			return nil, err
+		}
+
+		// add order item, snapshot price
+		orderItem := &OrderItem{
+			ID:        uuid.New(),
+			OrderID:   orderID,
+			ProductID: item.ProductID,
+			Price:     item.Price,
+			Qty:       item.Qty,
+			CreatedAt: now,
+		}
+
+		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
+			return nil, err
+		}
+
+	}
+
+	// create payment
+	paymentResult, err := s.payment.CreatePaymentWithTx(ctx, tx, orderID.String(), order.TotalAmount, req.PaymentMethod)
+	if err != nil {
+		return nil, err
+	}
+
+	// commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	// remove cart
+	if _, err := s.cart.DeleteCart(ctx, uid); err != nil {
+		return nil, err
+	}
+
+	// create order response
+	orderRespnse := &CreateOrderResponse{
+		OrderID:     orderID.String(),
+		TotalAmount: helper.ToFloat(order.TotalAmount),
+		PaymentURL:  paymentResult.PaymentURL,
+		ExpiredAt:   helper.FormatOptionalTime(paymentResult.ExpiredAt),
+	}
+	return orderRespnse, nil
+
+}
+
+func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutResponse, error) {
+
+	cart, err := s.getCart(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	coResp := &CheckoutResponse{}
+	for _, val := range cart.Items {
+		coItem := CheckoutItem{
+			ProductID: val.ProductID.String(),
+			Qty:       val.Qty,
+			Price:     helper.ToFloat(val.Price),
+		}
+		coResp.Items = append(coResp.Items, coItem)
+	}
+
+	coResp.TotalAmount = helper.ToFloat(cart.TotalAmount)
+	coResp.GrandTotal = helper.ToFloat(cart.TotalAmount)
 	coResp.PaymentMethod = "" // temp hardcoded, should implemen later
 	coResp.Shipping = nil     // temp hardcoded, should implemen later
 	coResp.Promo = nil        // temp hardcoded, should implemen later

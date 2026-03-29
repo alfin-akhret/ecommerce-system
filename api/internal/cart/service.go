@@ -12,10 +12,10 @@ import (
 
 type CartService struct {
 	repo    CartUpdater
-	product contracts.ProductGetter
+	product contracts.ProductManager
 }
 
-func NewCartService(repo CartUpdater, product contracts.ProductGetter) *CartService {
+func NewCartService(repo CartUpdater, product contracts.ProductManager) *CartService {
 	return &CartService{
 		repo:    repo,
 		product: product,

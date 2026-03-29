@@ -11,6 +11,7 @@ type CartItem struct {
 	Qty       int
 }
 
-type CartGetter interface {
+type CartManager interface {
 	GetCart(ctx context.Context, ownerID uuid.UUID) ([]CartItem, error)
+	DeleteCart(ctx context.Context, ownerID uuid.UUID) (string, error)
 }

@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	OrderStatusPending string = "PENDING"
+	OrderStatusPaid    string = "PAID"
+	OrderStatusFailed  string = "FAILED"
+)
+
 type Order struct {
 	ID          uuid.UUID
 	UserID      uuid.UUID
@@ -21,4 +27,26 @@ type OrderItem struct {
 	Price     int64
 	Qty       int
 	CreatedAt time.Time
+}
+
+type Cart struct {
+	Items       []CartItem
+	TotalAmount int64
+}
+
+type CartItem struct {
+	ProductID uuid.UUID
+	Price     int64
+	Qty       int
+}
+
+type ShippingInfo struct {
+	Method  string
+	Address string
+	Cost    int64
+}
+
+type PromoInfo struct {
+	Code   uuid.UUID
+	Amount int64
 }

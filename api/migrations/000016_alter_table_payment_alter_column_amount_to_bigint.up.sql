@@ -1,0 +1,6 @@
+ALTER TABLE payments
+ALTER COLUMN amount TYPE BIGINT
+USING ROUND(amount * 100);
+
+ALTER TABLE payments
+ALTER COLUMN amount SET NOT NULL;

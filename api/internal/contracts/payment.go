@@ -13,6 +13,6 @@ type PaymentCreateResult struct {
 	ExpiredAt  *time.Time
 }
 
-type PaymentUpdater interface {
+type PaymentManager interface {
 	CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount int64, method string) (*PaymentCreateResult, error)
 }
