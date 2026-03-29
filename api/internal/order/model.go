@@ -22,3 +22,25 @@ type OrderItem struct {
 	Qty       int
 	CreatedAt time.Time
 }
+
+type Cart struct {
+	Items       []CartItem
+	TotalAmount int64
+}
+
+type CartItem struct {
+	ProductID uuid.UUID
+	Price     int64
+	Qty       int
+}
+
+type ShippingInfo struct {
+	Method  string
+	Address string
+	Cost    int64
+}
+
+type PromoInfo struct {
+	Code   uuid.UUID
+	Amount int64
+}

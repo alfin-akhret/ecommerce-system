@@ -42,12 +42,12 @@ type CreateOrderResponse struct {
 
 // CHECKOUT DTO
 type CheckoutResponse struct {
-	Items         []CheckoutItem `json:"items"`
-	TotalAmount   float64        `json:"total_amount"`
-	GrandTotal    float64        `json:"grand_total"`
-	PaymentMethod string         `json:"payment_method"`
-	Shipping      *ShippingInfo  `json:"shipping"`
-	Promo         *PromoInfo     `json:"promo"`
+	Items         []CheckoutItem        `json:"items"`
+	TotalAmount   float64               `json:"total_amount"`
+	GrandTotal    float64               `json:"grand_total"`
+	PaymentMethod string                `json:"payment_method"`
+	Shipping      *ShippingInfoResponse `json:"shipping"`
+	Promo         *PromoInfoResponse    `json:"promo"`
 }
 
 type CheckoutItem struct {
@@ -57,13 +57,13 @@ type CheckoutItem struct {
 	Qty   int     `json:"qty"`
 }
 
-type ShippingInfo struct {
+type ShippingInfoResponse struct {
 	Method  string  `json:"method"`
 	Address string  `json:"address"`
 	Cost    float64 `json:"cost"`
 }
 
-type PromoInfo struct {
+type PromoInfoResponse struct {
 	Code   string  `json:"code"`
 	Amount float64 `json:"amount"`
 }
