@@ -29,8 +29,7 @@ type CreateOrderItem struct {
 }
 
 type CreateOrderRequest struct {
-	Items         []CreateOrderItem `json:"items"`
-	PaymentMethod string            `json:"payment_method"`
+	PaymentMethod string `json:"payment_method"`
 }
 
 type CreateOrderResponse struct {

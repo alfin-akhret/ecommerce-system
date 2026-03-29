@@ -6,6 +6,12 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	OrderStatusPending string = "PENDING"
+	OrderStatusPaid    string = "PAID"
+	OrderStatusFailed  string = "FAILED"
+)
+
 type Order struct {
 	ID          uuid.UUID
 	UserID      uuid.UUID

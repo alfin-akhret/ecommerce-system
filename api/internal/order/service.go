@@ -203,6 +203,90 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 
 }
 
+func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
+	// 1. get cart
+
+	cart, err := s.getCart(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+
+	// start DB transaction
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer s.db.Close()
+
+	repo := s.repo.WithTx(tx)
+
+	// create order
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	now := time.Now().UTC()
+
+	orderID := uuid.New()
+
+	order := &Order{
+		ID:          orderID,
+		UserID:      uid,
+		Status:      OrderStatusPending,
+		TotalAmount: cart.TotalAmount,
+		CreatedAt:   now,
+	}
+
+	if err := repo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	for _, item := range cart.Items {
+		// reserve stock
+		err := s.productUpdater.ReserveStockWithTx(ctx, tx, item.ProductID.String(), item.Qty)
+		if err != nil {
+			return nil, err
+		}
+
+		// add order item, snapshot price
+		orderItem := &OrderItem{
+			ID:        uuid.New(),
+			OrderID:   orderID,
+			ProductID: item.ProductID,
+			Price:     item.Price,
+			Qty:       item.Qty,
+			CreatedAt: now,
+		}
+
+		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
+			return nil, err
+		}
+
+	}
+
+	// create payment
+	paymentResult, err := s.paymentUpdater.CreatePaymentWithTx(ctx, tx, orderID.String(), order.TotalAmount, req.PaymentMethod)
+	if err != nil {
+		return nil, err
+	}
+
+	// commit transaction
+	if err := tx.Commit(ctx); err != nil {
+		return nil, err
+	}
+
+	// create order response
+	orderRespnse := &CreateOrderResponse{
+		OrderID:     orderID.String(),
+		TotalAmount: helper.ToFloat(order.TotalAmount),
+		PaymentURL:  paymentResult.PaymentURL,
+		ExpiredAt:   helper.FormatOptionalTime(paymentResult.ExpiredAt),
+	}
+	return orderRespnse, nil
+
+}
+
 func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutResponse, error) {
 
 	cart, err := s.getCart(ctx, userID)
@@ -227,9 +311,4 @@ func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutRespons
 	coResp.Promo = nil        // temp hardcoded, should implemen later
 
 	return coResp, nil
-}
-
-func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
-	// 1. get checkout item
-	return nil, nil
 }
