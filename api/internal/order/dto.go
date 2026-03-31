@@ -66,3 +66,11 @@ type PromoInfoResponse struct {
 	Code   string  `json:"code"`
 	Amount float64 `json:"amount"`
 }
+
+type CheckIdempotencyResponse struct {
+	Key       string `json:"idempotency_key"`
+	UserID    string `json:"userID"`
+	Status    string `json:"key_status"`
+	ExpiredAt string `json:"expired_at"`
+	Response  string `json:"response"`
+}

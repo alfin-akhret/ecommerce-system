@@ -2,8 +2,12 @@ package order
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -159,4 +163,47 @@ func (r *Repository) ListOrderItems(ctx context.Context, orderID string) ([]Orde
 	}
 
 	return items, nil
+}
+
+func (r *Repository) GetIdempotencyKey(ctx context.Context, userID uuid.UUID, iKey uuid.UUID) (*IdempotencyKey, error) {
+
+	query := `
+	SELECT key, user_id, status, expired_at, response
+	FROM idempotency_keys
+	WHERE key = $1 AND user_id = $2 AND status <> 'EXPIRED'
+	`
+	var result IdempotencyKey
+	if err := r.db.QueryRow(ctx, query, iKey, userID).Scan(
+		&result.Key,
+		&result.UserID,
+		&result.Status,
+		&result.ExpiredAt,
+		&result.Response,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	return &result, nil
+}
+
+func (r *Repository) SaveIdempotencyKey(ctx context.Context, userID uuid.UUID, iKey uuid.UUID, jsonResponse []byte, status string, expiredAt time.Time) error {
+	query := `
+	INSERT INTO idempotency_keys (key, user_id, status, response, expired_at)
+	VALUES ($1,$2,$3,$4,$5)
+	`
+
+	_, err := r.db.Exec(ctx, query,
+		iKey,
+		userID,
+		status,
+		jsonResponse,
+		expiredAt,
+	)
+
+	return err
 }

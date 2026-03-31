@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -200,7 +201,7 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 
 }
 
-func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
+func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
 	// 1. get cart
 
 	cart, err := s.getCart(ctx, userID)
@@ -268,6 +269,27 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		return nil, err
 	}
 
+	// create order response
+	orderRespnse := &CreateOrderResponse{
+		OrderID:     orderID.String(),
+		TotalAmount: helper.ToFloat(order.TotalAmount),
+		PaymentURL:  paymentResult.PaymentURL,
+		ExpiredAt:   helper.FormatOptionalTime(paymentResult.ExpiredAt),
+	}
+
+	// save idempotency
+	iKey, _ := uuid.Parse(key)
+	jsonResponse, _ := json.Marshal(orderRespnse)
+	if err := s.repo.SaveIdempotencyKey(ctx,
+		uid,
+		iKey,
+		jsonResponse,
+		OrderStatusPending,
+		now,
+	); err != nil {
+		return nil, err
+	}
+
 	// commit transaction
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
@@ -278,13 +300,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		return nil, err
 	}
 
-	// create order response
-	orderRespnse := &CreateOrderResponse{
-		OrderID:     orderID.String(),
-		TotalAmount: helper.ToFloat(order.TotalAmount),
-		PaymentURL:  paymentResult.PaymentURL,
-		ExpiredAt:   helper.FormatOptionalTime(paymentResult.ExpiredAt),
-	}
 	return orderRespnse, nil
 
 }
@@ -313,4 +328,39 @@ func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutRespons
 	coResp.Promo = nil        // temp hardcoded, should implemen later
 
 	return coResp, nil
+}
+
+func (s *Service) checkIdempotency(ctx context.Context, userID string, key string) (*CheckIdempotencyResponse, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	iKey, err := uuid.Parse(key)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.repo.GetIdempotencyKey(ctx, uid, iKey)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, nil
+	}
+
+	expiredAt := ""
+	if formatted := helper.FormatOptionalTime(result.ExpiredAt); formatted != nil {
+		expiredAt = *formatted
+	}
+
+	reponse := &CheckIdempotencyResponse{
+		Key:       result.Key.String(),
+		UserID:    result.UserID.String(),
+		Status:    result.Status,
+		ExpiredAt: expiredAt,
+		Response:  result.Response,
+	}
+
+	return reponse, nil
 }
