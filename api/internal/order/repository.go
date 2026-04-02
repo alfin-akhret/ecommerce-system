@@ -15,6 +15,25 @@ type Repository struct {
 	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
 }
 
+func (r *Repository) ExpireIdempotencyKey(ctx context.Context, orderID string) error {
+	query := `
+	UPDATE idempotency_keys
+	SET status = 'EXPIRED'
+	WHERE order_id = $1 AND status = 'PENDING'
+	`
+
+	cmd, err := r.db.Exec(ctx, query, orderID)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrKeyNotFound
+	}
+
+	return nil
+}
+
 func NewOrderRepository(db database.DBTX) *Repository {
 	return &Repository{
 		db: db,
@@ -172,6 +191,7 @@ func (r *Repository) GetIdempotencyKey(ctx context.Context, userID uuid.UUID, iK
 	FROM idempotency_keys
 	WHERE key = $1 AND user_id = $2 AND status <> 'EXPIRED'
 	`
+
 	var result IdempotencyKey
 	if err := r.db.QueryRow(ctx, query, iKey, userID).Scan(
 		&result.Key,
@@ -191,15 +211,23 @@ func (r *Repository) GetIdempotencyKey(ctx context.Context, userID uuid.UUID, iK
 	return &result, nil
 }
 
-func (r *Repository) SaveIdempotencyKey(ctx context.Context, userID uuid.UUID, iKey uuid.UUID, jsonResponse []byte, status string, expiredAt time.Time) error {
+func (r *Repository) SaveIdempotencyKey(ctx context.Context,
+	iKey uuid.UUID,
+	userID uuid.UUID,
+	orderID uuid.UUID,
+	status string,
+	jsonResponse []byte,
+	expiredAt time.Time) error {
+
 	query := `
-	INSERT INTO idempotency_keys (key, user_id, status, response, expired_at)
-	VALUES ($1,$2,$3,$4,$5)
+	INSERT INTO idempotency_keys (key, user_id, order_id, status, response, expired_at)
+	VALUES ($1,$2,$3,$4,$5,$6)
 	`
 
 	_, err := r.db.Exec(ctx, query,
 		iKey,
 		userID,
+		orderID,
 		status,
 		jsonResponse,
 		expiredAt,

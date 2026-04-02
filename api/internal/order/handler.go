@@ -3,7 +3,6 @@ package order
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
@@ -76,7 +75,6 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
 
 	var req CreateOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		fmt.Println("ERROR2:", err.Error())
 		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 

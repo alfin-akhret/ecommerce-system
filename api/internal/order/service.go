@@ -15,6 +15,7 @@ import (
 )
 
 var ErrOrderNotFound = errors.New("order not found")
+var ErrKeyNotFound = errors.New("idempotency key not found")
 
 type Service struct {
 	db      *pgxpool.Pool
@@ -95,7 +96,18 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
 	repo := s.repo.WithTx(tx)
-	return repo.UpdateOrderStatus(ctx, orderID, status)
+
+	err := repo.UpdateOrderStatus(ctx, orderID, status)
+	if err != nil {
+		return err
+	}
+
+	// expire order idempotency key
+	if err := repo.ExpireIdempotencyKey(ctx, orderID); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, orderID string, status string) error {
@@ -202,8 +214,8 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 }
 
 func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
-	// 1. get cart
 
+	// 1. get cart
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -281,11 +293,12 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	iKey, _ := uuid.Parse(key)
 	jsonResponse, _ := json.Marshal(orderRespnse)
 	if err := s.repo.SaveIdempotencyKey(ctx,
-		uid,
 		iKey,
-		jsonResponse,
+		uid,
+		orderID,
 		OrderStatusPending,
-		now,
+		jsonResponse,
+		*paymentResult.ExpiredAt,
 	); err != nil {
 		return nil, err
 	}
