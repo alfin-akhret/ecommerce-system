@@ -18,13 +18,14 @@ import (
 type App struct {
 	Config *config.Config
 
-	UserHandler             *user.UserHandler
-	AuthHandler             *auth.AuthHandler
-	ProductHandler          *product.Handler
-	OrderHandler            *order.Handler
-	PaymentHandler          *payment.Handler
-	CartHandler             *cart.Handler
-	PaymentExpirationWorker *payment.PaymentExpirationWorker
+	UserHandler                  *user.UserHandler
+	AuthHandler                  *auth.AuthHandler
+	ProductHandler               *product.Handler
+	OrderHandler                 *order.Handler
+	PaymentHandler               *payment.Handler
+	CartHandler                  *cart.Handler
+	PaymentExpirationWorker      *payment.PaymentExpirationWorker
+	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
 }
 
 func New() (*App, error) {
@@ -84,14 +85,22 @@ func New() (*App, error) {
 		100,
 	)
 
+	// idempotency key delete worker
+	iKeyDeletWorker := order.NewIdempotencyKeyDeleteWorker(
+		orderService,
+		10*time.Second,
+		100,
+	)
+
 	return &App{
-		Config:                  cfg,
-		UserHandler:             userHandler,
-		AuthHandler:             authHandler,
-		ProductHandler:          productHandler,
-		OrderHandler:            orderHandler,
-		PaymentHandler:          paymentHandler,
-		CartHandler:             cartHandler,
-		PaymentExpirationWorker: expirationWorker,
+		Config:                       cfg,
+		UserHandler:                  userHandler,
+		AuthHandler:                  authHandler,
+		ProductHandler:               productHandler,
+		OrderHandler:                 orderHandler,
+		PaymentHandler:               paymentHandler,
+		CartHandler:                  cartHandler,
+		PaymentExpirationWorker:      expirationWorker,
+		IdempotencyKeyDeletionWorker: iKeyDeletWorker,
 	}, nil
 }

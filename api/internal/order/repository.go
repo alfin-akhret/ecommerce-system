@@ -15,6 +15,36 @@ type Repository struct {
 	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
 }
 
+func (r *Repository) DeleteIdempotencyKey(ctx context.Context, limit int) ([]DeletedKeys, error) {
+	query := `
+	DELETE FROM idempotency_keys
+	WHERE key IN (
+		SELECT key FROM idempotency_keys
+		WHERE expired_at < NOW()
+		OR status = 'EXPIRED'
+		LIMIT $1)
+	RETURNING key, user_id, order_id
+	`
+
+	rows, err := r.db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []DeletedKeys
+	for rows.Next() {
+		var d DeletedKeys
+		if err := rows.Scan(&d.Key, &d.UserID, &d.OrderID); err != nil {
+			return nil, err
+		}
+		result = append(result, d)
+	}
+
+	return result, nil
+
+}
+
 func (r *Repository) ExpireIdempotencyKey(ctx context.Context, orderID string) error {
 	query := `
 	UPDATE idempotency_keys

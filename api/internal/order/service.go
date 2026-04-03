@@ -377,3 +377,11 @@ func (s *Service) checkIdempotency(ctx context.Context, userID string, key strin
 
 	return reponse, nil
 }
+
+func (s *Service) DeleteIdempotencyKey(ctx context.Context, limit int) ([]DeletedKeys, error) {
+	result, err := s.repo.DeleteIdempotencyKey(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
+}

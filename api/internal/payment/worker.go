@@ -51,12 +51,12 @@ func (w *PaymentExpirationWorker) Start(ctx context.Context) {
 		defer w.wg.Done()
 		defer ticker.Stop()
 
-		log.Println("[Worker] Payment expiration worker started")
+		log.Println("[Payment Worker] Payment expiration worker started")
 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("[Worker] stopping payment expiration worker...")
+				log.Println("[Payment Worker] stopping payment expiration worker...")
 				return
 
 			case <-ticker.C:
@@ -72,24 +72,24 @@ func (w *PaymentExpirationWorker) Stop() {
 	}
 
 	w.wg.Wait()
-	log.Println("[Worker] Payment expiratin worker stopped")
+	log.Println("[Payment Worker] Payment expiratin worker stopped")
 }
 
 func (w *PaymentExpirationWorker) run(ctx context.Context) {
-	log.Println("[Worker] running expiration job...")
+	log.Println("[Payment Worker] running expiration job...")
 
 	payments, err := w.service.ExpirePayments(ctx)
 	if err != nil {
-		log.Println("[Worker] failed to expire payments: ", err)
+		log.Println("[Payment Worker] failed to expire payments: ", err)
 		return
 	}
 
 	if len(payments) == 0 {
-		log.Println("[Worker] No expired payments found")
+		log.Println("[Payment Worker] No expired payments found")
 		return
 	}
 
-	log.Printf("[Worker] %d payments expired\n", len(payments))
+	log.Printf("[Payment Worker]%d payments expired\n", len(payments))
 
 	for _, p := range payments {
 		event := PaymentExpiredEvent{
@@ -100,13 +100,13 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 		err := w.publisher.Publish(ctx, "payment.expired", event)
 		if err != nil {
-			log.Printf("[Worker] failed publish event for payment %s: %v\n", p.ID, err)
+			log.Printf("[Payment Worker] failed publish event for payment %s: %v\n", p.ID, err)
 
 			// NOTE:
 			// di production → masukin ke retry / outbox
 			continue
 		}
 
-		log.Printf("[Worker] event published for payments %s\n", p.ID)
+		log.Printf("[Payment Worker] event published for payments %s\n", p.ID)
 	}
 }
