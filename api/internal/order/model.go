@@ -50,3 +50,11 @@ type PromoInfo struct {
 	Code   uuid.UUID
 	Amount int64
 }
+
+type IdempotencyKey struct {
+	Key       uuid.UUID
+	UserID    uuid.UUID
+	Status    string
+	ExpiredAt *time.Time
+	Response  string
+}

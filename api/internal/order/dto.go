@@ -1,5 +1,7 @@
 package order
 
+import "github.com/google/uuid"
+
 type OrderListItem struct {
 	ID          string  `json:"id"`
 	Status      string  `json:"status"`
@@ -65,4 +67,18 @@ type ShippingInfoResponse struct {
 type PromoInfoResponse struct {
 	Code   string  `json:"code"`
 	Amount float64 `json:"amount"`
+}
+
+type CheckIdempotencyResponse struct {
+	Key       string `json:"idempotency_key"`
+	UserID    string `json:"userID"`
+	Status    string `json:"key_status"`
+	ExpiredAt string `json:"expired_at"`
+	Response  string `json:"response"`
+}
+
+type DeletedKeys struct {
+	Key     uuid.UUID
+	UserID  uuid.UUID
+	OrderID uuid.UUID
 }

@@ -2,13 +2,66 @@ package order
 
 import (
 	"context"
+	"database/sql"
+	"errors"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
 type Repository struct {
 	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
+}
+
+func (r *Repository) DeleteIdempotencyKey(ctx context.Context, limit int) ([]DeletedKeys, error) {
+	query := `
+	DELETE FROM idempotency_keys
+	WHERE key IN (
+		SELECT key FROM idempotency_keys
+		WHERE expired_at < NOW()
+		OR status = 'EXPIRED'
+		LIMIT $1)
+	RETURNING key, user_id, order_id
+	`
+
+	rows, err := r.db.Query(ctx, query, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var result []DeletedKeys
+	for rows.Next() {
+		var d DeletedKeys
+		if err := rows.Scan(&d.Key, &d.UserID, &d.OrderID); err != nil {
+			return nil, err
+		}
+		result = append(result, d)
+	}
+
+	return result, nil
+
+}
+
+func (r *Repository) ExpireIdempotencyKey(ctx context.Context, orderID string) error {
+	query := `
+	UPDATE idempotency_keys
+	SET status = 'EXPIRED'
+	WHERE order_id = $1 AND status = 'PENDING'
+	`
+
+	cmd, err := r.db.Exec(ctx, query, orderID)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrKeyNotFound
+	}
+
+	return nil
 }
 
 func NewOrderRepository(db database.DBTX) *Repository {
@@ -159,4 +212,56 @@ func (r *Repository) ListOrderItems(ctx context.Context, orderID string) ([]Orde
 	}
 
 	return items, nil
+}
+
+func (r *Repository) GetIdempotencyKey(ctx context.Context, userID uuid.UUID, iKey uuid.UUID) (*IdempotencyKey, error) {
+
+	query := `
+	SELECT key, user_id, status, expired_at, response
+	FROM idempotency_keys
+	WHERE key = $1 AND user_id = $2 AND status <> 'EXPIRED'
+	`
+
+	var result IdempotencyKey
+	if err := r.db.QueryRow(ctx, query, iKey, userID).Scan(
+		&result.Key,
+		&result.UserID,
+		&result.Status,
+		&result.ExpiredAt,
+		&result.Response,
+	); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) || errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return nil, err
+		}
+	}
+
+	return &result, nil
+}
+
+func (r *Repository) SaveIdempotencyKey(ctx context.Context,
+	iKey uuid.UUID,
+	userID uuid.UUID,
+	orderID uuid.UUID,
+	status string,
+	jsonResponse []byte,
+	expiredAt time.Time) error {
+
+	query := `
+	INSERT INTO idempotency_keys (key, user_id, order_id, status, response, expired_at)
+	VALUES ($1,$2,$3,$4,$5,$6)
+	`
+
+	_, err := r.db.Exec(ctx, query,
+		iKey,
+		userID,
+		orderID,
+		status,
+		jsonResponse,
+		expiredAt,
+	)
+
+	return err
 }

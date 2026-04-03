@@ -75,9 +75,11 @@ func main() {
 	ctx := context.Background()
 
 	application.PaymentExpirationWorker.Start(ctx)
+	application.IdempotencyKeyDeletionWorker.Start(ctx)
 
 	// handle shutdown
 	defer application.PaymentExpirationWorker.Stop()
+	defer application.IdempotencyKeyDeletionWorker.Stop()
 
 	// select {} // block forever (sementara)
 

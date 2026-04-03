@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"log"
 	"time"
@@ -14,6 +15,7 @@ import (
 )
 
 var ErrOrderNotFound = errors.New("order not found")
+var ErrKeyNotFound = errors.New("idempotency key not found")
 
 type Service struct {
 	db      *pgxpool.Pool
@@ -94,7 +96,16 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
 	repo := s.repo.WithTx(tx)
-	return repo.UpdateOrderStatus(ctx, orderID, status)
+
+	err := repo.UpdateOrderStatus(ctx, orderID, status)
+	if err != nil {
+		return err
+	}
+
+	// expire order idempotency key
+	_ = repo.ExpireIdempotencyKey(ctx, orderID)
+
+	return nil
 }
 
 func (s *Service) UpdateStatus(ctx context.Context, orderID string, status string) error {
@@ -200,9 +211,9 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 
 }
 
-func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest) (*CreateOrderResponse, error) {
-	// 1. get cart
+func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
 
+	// 1. get cart
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
 		return nil, err
@@ -268,6 +279,28 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		return nil, err
 	}
 
+	// create order response
+	orderRespnse := &CreateOrderResponse{
+		OrderID:     orderID.String(),
+		TotalAmount: helper.ToFloat(order.TotalAmount),
+		PaymentURL:  paymentResult.PaymentURL,
+		ExpiredAt:   helper.FormatOptionalTime(paymentResult.ExpiredAt),
+	}
+
+	// save idempotency
+	iKey, _ := uuid.Parse(key)
+	jsonResponse, _ := json.Marshal(orderRespnse)
+	if err := s.repo.SaveIdempotencyKey(ctx,
+		iKey,
+		uid,
+		orderID,
+		OrderStatusPending,
+		jsonResponse,
+		*paymentResult.ExpiredAt,
+	); err != nil {
+		return nil, err
+	}
+
 	// commit transaction
 	if err := tx.Commit(ctx); err != nil {
 		return nil, err
@@ -278,13 +311,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		return nil, err
 	}
 
-	// create order response
-	orderRespnse := &CreateOrderResponse{
-		OrderID:     orderID.String(),
-		TotalAmount: helper.ToFloat(order.TotalAmount),
-		PaymentURL:  paymentResult.PaymentURL,
-		ExpiredAt:   helper.FormatOptionalTime(paymentResult.ExpiredAt),
-	}
 	return orderRespnse, nil
 
 }
@@ -313,4 +339,47 @@ func (s *Service) Checkout(ctx context.Context, userID string) (*CheckoutRespons
 	coResp.Promo = nil        // temp hardcoded, should implemen later
 
 	return coResp, nil
+}
+
+func (s *Service) checkIdempotency(ctx context.Context, userID string, key string) (*CheckIdempotencyResponse, error) {
+	uid, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	iKey, err := uuid.Parse(key)
+	if err != nil {
+		return nil, err
+	}
+
+	result, err := s.repo.GetIdempotencyKey(ctx, uid, iKey)
+	if err != nil {
+		return nil, err
+	}
+	if result == nil {
+		return nil, nil
+	}
+
+	expiredAt := ""
+	if formatted := helper.FormatOptionalTime(result.ExpiredAt); formatted != nil {
+		expiredAt = *formatted
+	}
+
+	reponse := &CheckIdempotencyResponse{
+		Key:       result.Key.String(),
+		UserID:    result.UserID.String(),
+		Status:    result.Status,
+		ExpiredAt: expiredAt,
+		Response:  result.Response,
+	}
+
+	return reponse, nil
+}
+
+func (s *Service) DeleteIdempotencyKey(ctx context.Context, limit int) ([]DeletedKeys, error) {
+	result, err := s.repo.DeleteIdempotencyKey(ctx, limit)
+	if err != nil {
+		return nil, err
+	}
+	return result, nil
 }

@@ -62,12 +62,23 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
 		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
 	}
 
+	idempotencyKey := r.Header.Get("Idempotency-Key")
+	idempotencyResp, err := h.service.checkIdempotency(r.Context(), userID, idempotencyKey)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
+	}
+
+	if idempotencyResp != nil && idempotencyResp.Key != "" && idempotencyResp.UserID != "" {
+		helper.WriteSuccess(w, http.StatusOK, idempotencyResp)
+		return nil
+	}
+
 	var req CreateOrderRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	resp, err := h.service.CreateOrder(r.Context(), userID, req)
+	resp, err := h.service.CreateOrder(r.Context(), userID, req, idempotencyKey)
 	if err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
