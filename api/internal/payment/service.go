@@ -29,7 +29,7 @@ const (
 )
 
 const paymentURL string = "http://localhost:8081/pay?payment_id="
-const paymentExpiry = 2 * time.Minute // todo: move to config
+const paymentExpiry = 1 * time.Minute // todo: move to config
 
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")

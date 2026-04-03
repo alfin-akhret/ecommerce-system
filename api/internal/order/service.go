@@ -103,9 +103,7 @@ func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderI
 	}
 
 	// expire order idempotency key
-	if err := repo.ExpireIdempotencyKey(ctx, orderID); err != nil {
-		return err
-	}
+	_ = repo.ExpireIdempotencyKey(ctx, orderID)
 
 	return nil
 }
