@@ -251,9 +251,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		CreatedAt:   now,
 	}
 
-	if err := repo.CreateOrder(ctx, order); err != nil {
-		return nil, err
-	}
+	orderItems := make([]*OrderItem, 0, len(cart.Items))
 
 	for _, item := range cart.Items {
 		// reserve stock
@@ -263,19 +261,24 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		}
 
 		// add order item, snapshot price
-		orderItem := &OrderItem{
+		orderItems = append(orderItems, &OrderItem{
 			ID:        uuid.New(),
 			OrderID:   orderID,
 			ProductID: item.ProductID,
 			Price:     item.Price,
 			Qty:       item.Qty,
 			CreatedAt: now,
-		}
+		})
+	}
 
+	if err := repo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	for _, orderItem := range orderItems {
 		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
 			return nil, err
 		}
-
 	}
 
 	// create payment

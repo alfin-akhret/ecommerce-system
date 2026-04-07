@@ -13,8 +13,8 @@
 - Jika stock kurang, return error → user bisa update cart ✅
 
 ## 3. Price & Promo Validation
-- Hitung ulang harga terbaru saat CreateOrder
-- Snapshot price ke order_items (immutable)
+- Hitung ulang harga terbaru saat CreateOrder ✅
+- Snapshot price ke order_items (immutable) ✅
 - Apply promo / discount rules (jika ada)
 - Pastikan GrandTotal = Total + Shipping – Promo
 
