@@ -1,16 +1,16 @@
 # Create Order Checklist
 
 ## 1. Input & Request Validation
-- User ID valid (uuid parse)
-- Cart tidak kosong
-- Qty > 0
-- Price snapshot valid (produk masih ada di DB)
+- User ID valid (uuid parse) ✅
+- Cart tidak kosong ✅
+- Qty > 0 ✅
+- Price snapshot valid (produk masih ada di DB) ✅
 
 ## 2. Stock & Inventory
-- Stock cukup sebelum reserve
-- Reserve stock atomic dengan create order
-- Jangan oversell kalau ada race condition
-- Jika stock kurang, return error → user bisa update cart
+- Stock cukup sebelum reserve ✅
+- Reserve stock atomic dengan create order ✅
+- Jangan oversell kalau ada race condition ✅ 
+- Jika stock kurang, return error → user bisa update cart ✅
 
 ## 3. Price & Promo Validation
 - Hitung ulang harga terbaru saat CreateOrder

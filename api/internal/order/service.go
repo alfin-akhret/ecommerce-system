@@ -16,6 +16,7 @@ import (
 
 var ErrOrderNotFound = errors.New("order not found")
 var ErrKeyNotFound = errors.New("idempotency key not found")
+var ErrCartItem = errors.New("there's no item in the cart or the total amount is 0")
 
 type Service struct {
 	db      *pgxpool.Pool
@@ -217,6 +218,10 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
 		return nil, err
+	}
+
+	if cart.Items == nil || cart.TotalAmount == 0 {
+		return nil, ErrCartItem
 	}
 
 	// start DB transaction
