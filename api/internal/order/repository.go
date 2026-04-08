@@ -167,6 +167,7 @@ func (r *Repository) UpdateOrderStatus(ctx context.Context, orderID string, stat
 	UPDATE orders
 	SET status = $1
 	WHERE id = $2
+	AND status = 'PENDING'
 	`
 
 	cmd, err := r.db.Exec(ctx, query, status, orderID)
