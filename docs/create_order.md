@@ -19,16 +19,16 @@
 - Pastikan GrandTotal = Total + Shipping – Promo
 
 ## 4. Idempotency
-- Endpoint harus aman jika user klik “Place Order” berkali-kali
-- Bisa pakai idempotency key atau constraint unik per cart
-- Jangan double reserve stock / double insert order
+- Endpoint harus aman jika user klik “Place Order” berkali-kali ✅
+- Bisa pakai idempotency key atau constraint unik per cart ✅
+- Jangan double reserve stock / double insert order ✅
 
 ## 5. Order Status & Lifecycle
-- Set status awal → PENDING
-- Payment belum bayar → tetap PENDING
-- Payment callback → update → PAID
-- Worker untuk expired orders → update → CANCELLED + release stock
-- Pastikan worker hanya cancel PENDING, jangan sentuh PAID
+- Set status awal → PENDING ✅
+- Payment belum bayar → tetap PENDING ✅
+- Payment callback → update → PAID ✅
+- Worker untuk expired orders → update → CANCELLED + release stock ✅
+- Pastikan worker hanya cancel PENDING, jangan sentuh PAID ✅
 
 ## 6. Concurrency & Race Conditions
 - Transaction boundary jelas untuk:
@@ -38,11 +38,11 @@
 - Locking / SELECT ... FOR UPDATE di DB jika perlu
 
 ## 7. Error Handling
-- Product not found → return error
-- Stock insufficient → return error
-- DB error → rollback order & stock
-- Payment error → user bisa retry
-- Timeout / worker cancel → release stock
+- Product not found → return error ✅
+- Stock insufficient → return error ✅
+- DB error → rollback order & stock ✅
+- Payment error → user bisa retry 
+- Timeout / worker cancel → release stock ✅
 
 ## 8. Logging & Monitoring
 - Log create order attempt & result
