@@ -142,6 +142,7 @@ func (r *Repository) ReleasedReserved(ctx context.Context, productID string, qty
 	SET reserved = reserved - $1,
 	    updated_at = now()
 	WHERE product_id = $2
+	AND reserved >= $1
 	`
 	_, err := r.db.Exec(ctx, query, qty, productID)
 

@@ -16,6 +16,7 @@ import (
 
 var ErrOrderNotFound = errors.New("order not found")
 var ErrKeyNotFound = errors.New("idempotency key not found")
+var ErrCartItem = errors.New("there's no item in the cart or the total amount is 0")
 
 type Service struct {
 	db      *pgxpool.Pool
@@ -219,6 +220,10 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		return nil, err
 	}
 
+	if cart.Items == nil || cart.TotalAmount == 0 {
+		return nil, ErrCartItem
+	}
+
 	// start DB transaction
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
@@ -246,9 +251,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		CreatedAt:   now,
 	}
 
-	if err := repo.CreateOrder(ctx, order); err != nil {
-		return nil, err
-	}
+	orderItems := make([]*OrderItem, 0, len(cart.Items))
 
 	for _, item := range cart.Items {
 		// reserve stock
@@ -258,19 +261,24 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		}
 
 		// add order item, snapshot price
-		orderItem := &OrderItem{
+		orderItems = append(orderItems, &OrderItem{
 			ID:        uuid.New(),
 			OrderID:   orderID,
 			ProductID: item.ProductID,
 			Price:     item.Price,
 			Qty:       item.Qty,
 			CreatedAt: now,
-		}
+		})
+	}
 
+	if err := repo.CreateOrder(ctx, order); err != nil {
+		return nil, err
+	}
+
+	for _, orderItem := range orderItems {
 		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
 			return nil, err
 		}
-
 	}
 
 	// create payment

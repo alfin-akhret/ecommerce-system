@@ -11,4 +11,5 @@ TODO:
 - ~~set cart TTL: 24 hours~~
 - ~~change all price to int64, including in DB~~
 - ~~add engineering notes: topic: price data type~~
-- CreateOrder flow , integrate with cart and checkout.
+- ~~CreateOrder flow , integrate with cart and checkout.~~
+
