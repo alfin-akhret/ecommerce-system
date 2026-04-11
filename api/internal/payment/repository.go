@@ -48,6 +48,7 @@ func (r *Repository) UpdateStatus(ctx context.Context, paymentID string, status 
 	UPDATE payments
 	SET status = $1, paid_at = $2, updated_at = now()
 	WHERE id = $3
+	AND status = 'PENDING'
 	`
 
 	cmd, err := r.db.Exec(ctx, query, status, paidAt, paymentID)
@@ -68,6 +69,36 @@ func (r *Repository) GetByID(ctx context.Context, paymentID string) (*Payment, e
 	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at
 	FROM payments
 	WHERE id = $1
+	`
+
+	var p Payment
+	err := r.db.QueryRow(ctx, query, paymentID).Scan(
+		&p.ID,
+		&p.OrderID,
+		&p.Amount,
+		&p.Status,
+		&p.PaymentMethod,
+		&p.PaidAt,
+		&p.CreatedAt,
+		&p.UpdatedAt,
+		&p.ExpiredAt,
+	)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrPaymentNotFound
+		}
+		return nil, err
+	}
+
+	return &p, nil
+}
+
+func (r *Repository) GetByIDForUpdate(ctx context.Context, paymentID string) (*Payment, error) {
+	query := `
+	SELECT id, order_id, amount, status, payment_method, paid_at, created_at, updated_at, expired_at
+	FROM payments
+	WHERE id = $1
+	FOR UPDATE
 	`
 
 	var p Payment
@@ -193,4 +224,36 @@ func (r *Repository) ExpirePayments(ctx context.Context) ([]ExpiredPayment, erro
 	}
 
 	return results, nil
+}
+
+func (r *Repository) GetSecret(ctx context.Context, id string) (string, error) {
+	query := `
+	SELECT value FROM secrets
+	WHERE name = $1`
+
+	var secret string
+	err := r.db.QueryRow(ctx, query, id).Scan(&secret)
+	if err != nil {
+		return "", err
+	}
+
+	return secret, nil
+}
+
+func (r *Repository) AddPaymentRecon(ctx context.Context, data *ReconData) error {
+	query := `
+	INSERT INTO payment_recon (payment_id, status, remark, created_at)
+	VALUES($1, $2, $3, $4)
+	`
+
+	_, err := r.db.Exec(ctx, query,
+		data.PaymentID,
+		data.Status,
+		data.Remark,
+		data.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

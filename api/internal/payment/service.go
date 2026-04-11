@@ -35,6 +35,7 @@ var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
 var ErrInvalidStatus = errors.New("invalid payment status")
 var ErrOrderStatusUpdaterNotSet = errors.New("order status updater is not configured")
+var ErrPaymentExpired = errors.New("payment expired")
 
 func NewService(db *pgxpool.Pool) *Service {
 	return &Service{
@@ -240,17 +241,7 @@ func (s *Service) processPayment(
 	return tx.Commit(ctx)
 }
 
-func (s *Service) HandleCallback(req PaymentCallbackRequest) error {
-	ctx := context.Background()
-
-	payment, err := s.repo.GetByID(ctx, req.PaymentID)
-	if err != nil {
-		return err
-	}
-
-	if payment.Status == StatusSuccess || payment.Status == StatusFailed {
-		return nil
-	}
+func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest) error {
 
 	status, err := normalizeStatus(req.Status)
 	if err != nil {
@@ -259,12 +250,83 @@ func (s *Service) HandleCallback(req PaymentCallbackRequest) error {
 
 	switch status {
 	case StatusSuccess:
-		return s.ProcessPaymentSuccess(ctx, req.PaymentID)
+		return s.processCallback(ctx, req.PaymentID, StatusSuccess, func(tx pgx.Tx, payment *Payment) error {
+			if err := s.orderStatusUpdater.ConfirmOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+				return err
+			}
+
+			return s.orderStatusUpdater.UpdateOrderStatusWithTx(
+				ctx,
+				tx,
+				payment.OrderID.String(),
+				StatusPaid,
+			)
+		})
 	case StatusFailed:
-		return s.ProcessPaymentFailed(ctx, req.PaymentID)
+		return s.processCallback(ctx, req.PaymentID, StatusFailed, func(tx pgx.Tx, payment *Payment) error {
+			if err := s.orderStatusUpdater.ReleaseOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+				return err
+			}
+
+			return s.orderStatusUpdater.UpdateOrderStatusWithTx(
+				ctx,
+				tx,
+				payment.OrderID.String(),
+				StatusCancelled,
+			)
+		})
 	default:
 		return ErrInvalidStatus
 	}
+}
+
+func (s *Service) processCallback(
+	ctx context.Context,
+	paymentID string,
+	nextStatus string,
+	afterUpdate func(tx pgx.Tx, payment *Payment) error,
+) error {
+	if s.orderStatusUpdater == nil {
+		return ErrOrderStatusUpdaterNotSet
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx)
+
+	paymentRepo := s.repo.WithTx(tx)
+
+	payment, err := paymentRepo.GetByIDForUpdate(ctx, paymentID)
+	if err != nil {
+		return err
+	}
+
+	if payment.Status != StatusPending {
+		if payment.Status == StatusExpired && nextStatus == StatusSuccess { // late payment
+			return ErrPaymentExpired
+		}
+		return nil
+	}
+
+	var paidAt *time.Time
+	if nextStatus == StatusSuccess {
+		now := time.Now().UTC()
+		paidAt = &now
+	}
+
+	if err := paymentRepo.UpdateStatus(ctx, paymentID, nextStatus, paidAt); err != nil {
+		return err
+	}
+
+	if afterUpdate != nil {
+		if err := afterUpdate(tx, payment); err != nil {
+			return err
+		}
+	}
+
+	return tx.Commit(ctx)
 }
 
 func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) {
@@ -273,4 +335,29 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 		return nil, err
 	}
 	return expiredPayments, nil
+}
+
+func (s *Service) AddPaymentRecon(ctx context.Context, req PaymentCallbackRequest) error {
+
+	pid, err := uuid.Parse(req.PaymentID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+
+	reconData := &ReconData{
+		PaymentID: pid,
+		Status:    "PENDING",
+		Remark:    "Late Payment",
+		CreatedAt: now,
+	}
+
+	err = s.repo.AddPaymentRecon(ctx, reconData)
+	if err != nil {
+		err = errors.New("Something Wrong")
+		return err
+	}
+
+	return nil
 }

@@ -9,8 +9,8 @@
     - auto refund atau
     - auto recreate order (conditional)
 
-2. **Payment Idempotency (Webhook)**
-- Pastikan callback payment tidak diproses 2x
+2. **Payment Idempotency (Webhook)** ✅
+- Pastikan callback payment tidak diproses 2x 
 - Tambahin:
     - unique constraint di payment_id (dari gateway)
     - atau idempotency table khusus payment

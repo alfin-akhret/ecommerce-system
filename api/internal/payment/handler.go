@@ -1,7 +1,10 @@
 package payment
 
 import (
+	"bytes"
+	"context"
 	"errors"
+	"io"
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -79,12 +82,38 @@ func (h *Handler) GetPayment(w http.ResponseWriter, r *http.Request) error {
 
 // HandleCallback endpoint
 func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	signature := r.Header.Get("X-Signature")
+
+	ctx := context.Background()
+	secret, err := h.service.repo.GetSecret(ctx, "payment_hmac_secret_key")
+	if err != nil {
+		return err
+	}
+
+	ok := helper.VerifyHMAC(string(body), secret, signature)
+	if !ok {
+		err := errors.New("Wrong signature")
+		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
+
 	var req PaymentCallbackRequest
 	if err := helper.DecodeJSON(r, &req); err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	if err := h.service.HandleCallback(req); err != nil {
+	if err := h.service.HandleCallback(ctx, req); err != nil {
+		if errors.Is(err, ErrPaymentExpired) {
+			if err := h.service.AddPaymentRecon(ctx, req); err != nil {
+				return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+		}
 		if errors.Is(err, ErrInvalidStatus) {
 			return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 		}

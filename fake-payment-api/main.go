@@ -1,7 +1,11 @@
 package main
 
 import (
+	"crypto/hmac"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -22,22 +26,48 @@ func main() {
 	}
 }
 
+func GenerateHMAC(message, secret string) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write([]byte(message))
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 func sendCallback(paymentID string, status string) error {
 	payload := fmt.Sprintf(`{
 		"payment_id": "%s",
 		"status" :"%s"
 	}`, paymentID, status)
 
-	resp, err := http.Post(
+	// create signature
+	sign := GenerateHMAC(payload, "ini-rahasia")
+
+	req, err := http.NewRequest(
+		http.MethodPost,
 		"http://localhost:8080/payments/callback",
-		"application/json",
 		strings.NewReader(payload),
 	)
 	if err != nil {
 		return err
 	}
 
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Signature", sign)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return err
+	}
 	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	if resp.StatusCode >= 400 {
+		return fmt.Errorf("callback failed: status=%d body=%s", resp.StatusCode, string(body))
+	}
 
 	return nil
 }
