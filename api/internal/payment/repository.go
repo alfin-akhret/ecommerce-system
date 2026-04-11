@@ -225,3 +225,17 @@ func (r *Repository) ExpirePayments(ctx context.Context) ([]ExpiredPayment, erro
 
 	return results, nil
 }
+
+func (r *Repository) GetSecret(ctx context.Context, id string) (string, error) {
+	query := `
+	SELECT value FROM secrets
+	WHERE name = $1`
+
+	var secret string
+	err := r.db.QueryRow(ctx, query, id).Scan(&secret)
+	if err != nil {
+		return "", err
+	}
+
+	return secret, nil
+}

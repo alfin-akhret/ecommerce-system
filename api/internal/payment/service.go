@@ -29,7 +29,7 @@ const (
 )
 
 const paymentURL string = "http://localhost:8081/pay?payment_id="
-const paymentExpiry = 1 * time.Minute // todo: move to config
+const paymentExpiry = 10 * time.Minute // todo: move to config
 
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
@@ -240,8 +240,7 @@ func (s *Service) processPayment(
 	return tx.Commit(ctx)
 }
 
-func (s *Service) HandleCallback(req PaymentCallbackRequest) error {
-	ctx := context.Background()
+func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest) error {
 
 	status, err := normalizeStatus(req.Status)
 	if err != nil {
