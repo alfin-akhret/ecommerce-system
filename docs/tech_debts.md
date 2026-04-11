@@ -2,7 +2,7 @@
 
 ### 🔴 HIGH PRIORITY (impact ke money / user trust)
 
-1. **Late Payment Handling (Post-Cancel)**
+1. **Late Payment Handling (Post-Cancel)** ✅
 - Current: manual reconciliation
 - Problem: user udah bayar tapi order CANCELLED
 - Future:
