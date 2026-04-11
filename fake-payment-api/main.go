@@ -40,7 +40,6 @@ func sendCallback(paymentID string, status string) error {
 
 	// create signature
 	sign := GenerateHMAC(payload, "ini-rahasia")
-	fmt.Println(sign)
 
 	req, err := http.NewRequest(
 		http.MethodPost,
