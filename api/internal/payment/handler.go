@@ -109,6 +109,11 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	if err := h.service.HandleCallback(ctx, req); err != nil {
+		if errors.Is(err, ErrPaymentExpired) {
+			if err := h.service.AddPaymentRecon(ctx, req); err != nil {
+				return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
+			}
+		}
 		if errors.Is(err, ErrInvalidStatus) {
 			return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 		}

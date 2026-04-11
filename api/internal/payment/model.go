@@ -22,3 +22,10 @@ type ExpiredPayment struct {
 	ID      uuid.UUID
 	OrderID uuid.UUID
 }
+
+type ReconData struct {
+	PaymentID uuid.UUID
+	Status    string
+	Remark    string
+	CreatedAt time.Time
+}

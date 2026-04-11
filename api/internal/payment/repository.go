@@ -239,3 +239,21 @@ func (r *Repository) GetSecret(ctx context.Context, id string) (string, error) {
 
 	return secret, nil
 }
+
+func (r *Repository) AddPaymentRecon(ctx context.Context, data *ReconData) error {
+	query := `
+	INSERT INTO payment_recon (payment_id, status, remark, created_at)
+	VALUES($1, $2, $3, $4)
+	`
+
+	_, err := r.db.Exec(ctx, query,
+		data.PaymentID,
+		data.Status,
+		data.Remark,
+		data.CreatedAt)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}

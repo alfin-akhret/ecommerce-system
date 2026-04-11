@@ -29,12 +29,13 @@ const (
 )
 
 const paymentURL string = "http://localhost:8081/pay?payment_id="
-const paymentExpiry = 10 * time.Minute // todo: move to config
+const paymentExpiry = 1 * time.Minute // todo: move to config
 
 var ErrInvalidAmount = errors.New("amount must be greater than 0")
 var ErrInvalidPaymentMethod = errors.New("payment method is required")
 var ErrInvalidStatus = errors.New("invalid payment status")
 var ErrOrderStatusUpdaterNotSet = errors.New("order status updater is not configured")
+var ErrPaymentExpired = errors.New("payment expired")
 
 func NewService(db *pgxpool.Pool) *Service {
 	return &Service{
@@ -303,6 +304,9 @@ func (s *Service) processCallback(
 	}
 
 	if payment.Status != StatusPending {
+		if payment.Status == StatusExpired && nextStatus == StatusSuccess { // late payment
+			return ErrPaymentExpired
+		}
 		return nil
 	}
 
@@ -331,4 +335,29 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 		return nil, err
 	}
 	return expiredPayments, nil
+}
+
+func (s *Service) AddPaymentRecon(ctx context.Context, req PaymentCallbackRequest) error {
+
+	pid, err := uuid.Parse(req.PaymentID)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now().UTC()
+
+	reconData := &ReconData{
+		PaymentID: pid,
+		Status:    "PENDING",
+		Remark:    "Late Payment",
+		CreatedAt: now,
+	}
+
+	err = s.repo.AddPaymentRecon(ctx, reconData)
+	if err != nil {
+		err = errors.New("Something Wrong")
+		return err
+	}
+
+	return nil
 }
