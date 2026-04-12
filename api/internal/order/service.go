@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 var ErrOrderNotFound = errors.New("order not found")
@@ -213,14 +214,17 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 }
 
 func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
+	log := helper.LoggerFromCtx(ctx)
 
 	// 1. get cart
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
+		log.Error("Failed to create order", zap.Error(ErrCartItem))
 		return nil, err
 	}
 
 	if cart.Items == nil || cart.TotalAmount == 0 {
+		log.Error("Failed to create order", zap.Error(ErrCartItem))
 		return nil, ErrCartItem
 	}
 
