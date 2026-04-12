@@ -30,3 +30,16 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+func LoggerMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			reqID := r.Context().Value(RequestIDKey).(string)
+			l := logger.With(zap.String("request_id", reqID))
+			ctx := context.WithValue(r.Context(), "logger", l)
+
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
