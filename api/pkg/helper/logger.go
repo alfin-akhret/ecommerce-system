@@ -31,15 +31,28 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+type loggerKey string
+
+const LoggerIDKey = loggerKey("logger")
+
 func LoggerMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
 			reqID := r.Context().Value(RequestIDKey).(string)
 			l := logger.With(zap.String("request_id", reqID))
-			ctx := context.WithValue(r.Context(), "logger", l)
+			ctx := context.WithValue(r.Context(), LoggerIDKey, l)
 
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
+}
+
+// helper to get logger from context
+func LoggerFromCtx(ctx context.Context) *zap.Logger {
+	l, ok := ctx.Value(LoggerIDKey).(*zap.Logger)
+	if !ok {
+		return NewLogger()
+	}
+	return l
 }
