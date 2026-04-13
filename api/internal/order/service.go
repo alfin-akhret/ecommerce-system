@@ -216,21 +216,24 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
 	log := helper.LoggerFromCtx(ctx)
 
+	log.Info("Order: Creating Order")
+
 	// 1. get cart
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
-		log.Error("Failed to create order", zap.Error(ErrCartItem))
+		log.Error("Order: Failed to create order", zap.Error(ErrCartItem))
 		return nil, err
 	}
 
 	if cart.Items == nil || cart.TotalAmount == 0 {
-		log.Error("Failed to create order", zap.Error(ErrCartItem))
+		log.Error("Order: Failed to create order", zap.Error(ErrCartItem))
 		return nil, ErrCartItem
 	}
 
 	// start DB transaction
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
+		log.Error("Order: Failed to start DB transaction", zap.Error(err))
 		return nil, err
 	}
 	defer tx.Rollback(ctx)
@@ -240,6 +243,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	// create order
 	uid, err := uuid.Parse(userID)
 	if err != nil {
+		log.Error("Order: Failed to parse user id", zap.Error(err))
 		return nil, err
 	}
 
@@ -276,11 +280,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 
 	if err := repo.CreateOrder(ctx, order); err != nil {
+		log.Error("Order: Failed to create order", zap.Error(err))
 		return nil, err
 	}
 
 	for _, orderItem := range orderItems {
 		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
+			log.Error("Order: Failed to create order item", zap.Error(err))
 			return nil, err
 		}
 	}
@@ -288,6 +294,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	// create payment
 	paymentResult, err := s.payment.CreatePaymentWithTx(ctx, tx, orderID.String(), order.TotalAmount, req.PaymentMethod)
 	if err != nil {
+		log.Error("Order: Failed to create payment", zap.Error(err))
 		return nil, err
 	}
 
@@ -310,16 +317,21 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		jsonResponse,
 		*paymentResult.ExpiredAt,
 	); err != nil {
+		log.Error("Order: Failed to save idempotency key", zap.Error(err))
 		return nil, err
 	}
 
 	// commit transaction
 	if err := tx.Commit(ctx); err != nil {
+		log.Error("Order: Failed to commit transaction", zap.Error(err))
 		return nil, err
 	}
 
+	log.Info("Order: Order created", zap.String("order id: ", orderID.String()))
+
 	// remove cart
 	if _, err := s.cart.DeleteCart(ctx, uid); err != nil {
+		log.Error("Order: Failed to delete cart", zap.Error(err))
 		return nil, err
 	}
 
