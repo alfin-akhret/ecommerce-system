@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -54,10 +55,26 @@ func (s *Service) CreatePayment(ctx context.Context, orderID string, amount int6
 }
 
 func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount int64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+	log := helper.LoggerFromCtx(ctx)
+	lOrderID := zap.String("order_id", orderID)
+	lAmount := zap.Int64("amount", amount)
+	lPaymentMethod := zap.String("payment_method", paymentMethod)
+
+	log.Info("Payment: Creating payment with transaction", lOrderID, lAmount, lPaymentMethod)
+
 	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
 	if err != nil {
+		log.Error("Payment: Failed to create payment with transaction", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
+
+	log.Info(
+		"Payment: Payment created with transaction",
+		lOrderID,
+		zap.String("payment_id", resp.ID),
+		lAmount,
+		lPaymentMethod,
+	)
 
 	return &contracts.PaymentCreateResult{
 		ID:         resp.ID,
@@ -88,16 +105,26 @@ func (s *Service) GetPaymentByOrderID(ctx context.Context, orderID string) (*Pay
 }
 
 func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID string, amount int64, paymentMethod string) (*CreatePaymentResponse, error) {
+	log := helper.LoggerFromCtx(ctx)
+	lOrderID := zap.String("order_id", orderID)
+	lAmount := zap.Int64("amount", amount)
+	lPaymentMethod := zap.String("payment_method", paymentMethod)
+
+	log.Info("Payment: Creating payment", lOrderID, lAmount, lPaymentMethod)
+
 	if amount <= 0 {
+		log.Warn("Payment: Invalid payment amount", lOrderID, lAmount, lPaymentMethod, zap.Error(ErrInvalidAmount))
 		return nil, ErrInvalidAmount
 	}
 	if strings.TrimSpace(paymentMethod) == "" {
+		log.Warn("Payment: Payment method is required", lOrderID, lAmount, lPaymentMethod, zap.Error(ErrInvalidPaymentMethod))
 		return nil, ErrInvalidPaymentMethod
 	}
 
 	paymentID := uuid.New()
 	orderUUID, err := uuid.Parse(orderID)
 	if err != nil {
+		log.Error("Payment: Failed to parse order ID", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
 
@@ -113,10 +140,27 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	}
 
 	if err := repo.CreatePayment(ctx, p); err != nil {
+		log.Error(
+			"Payment: Failed to create payment",
+			lOrderID,
+			zap.String("payment_id", paymentID.String()),
+			lAmount,
+			lPaymentMethod,
+			zap.Error(err),
+		)
 		return nil, err
 	}
 
 	paymentURL := paymentURL + paymentID.String()
+
+	log.Info(
+		"Payment: Payment created",
+		lOrderID,
+		zap.String("payment_id", paymentID.String()),
+		lAmount,
+		lPaymentMethod,
+		zap.Time("expired_at", expiredAt),
+	)
 
 	return &CreatePaymentResponse{
 		ID:            paymentID.String(),
@@ -166,10 +210,27 @@ func normalizeStatus(status string) (string, error) {
 }
 
 func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) error {
+	log := helper.LoggerFromCtx(ctx)
+	lPaymentID := zap.String("payment_id", paymentID)
+
+	log.Info("Payment: Processing payment success", lPaymentID)
+
 	return s.processPayment(ctx, paymentID, StatusSuccess, func(tx pgx.Tx, payment *Payment) error {
 		if err := s.orderStatusUpdater.ConfirmOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+			log.Error(
+				"Payment: Failed to confirm order stock after payment success",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				zap.Error(err),
+			)
 			return err
 		}
+
+		log.Info(
+			"Payment: Order stock confirmed after payment success",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+		)
 
 		return s.orderStatusUpdater.UpdateOrderStatusWithTx(
 			ctx,
@@ -181,10 +242,27 @@ func (s *Service) ProcessPaymentSuccess(ctx context.Context, paymentID string) e
 }
 
 func (s *Service) ProcessPaymentFailed(ctx context.Context, paymentID string) error {
+	log := helper.LoggerFromCtx(ctx)
+	lPaymentID := zap.String("payment_id", paymentID)
+
+	log.Info("Payment: Processing payment failure", lPaymentID)
+
 	return s.processPayment(ctx, paymentID, StatusFailed, func(tx pgx.Tx, payment *Payment) error {
 		if err := s.orderStatusUpdater.ReleaseOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+			log.Error(
+				"Payment: Failed to release order stock after payment failure",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				zap.Error(err),
+			)
 			return err
 		}
+
+		log.Info(
+			"Payment: Order stock released after payment failure",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+		)
 
 		return s.orderStatusUpdater.UpdateOrderStatusWithTx(
 			ctx,
@@ -201,12 +279,20 @@ func (s *Service) processPayment(
 	nextStatus string,
 	afterUpdate func(tx pgx.Tx, payment *Payment) error,
 ) error {
+	log := helper.LoggerFromCtx(ctx)
+	lPaymentID := zap.String("payment_id", paymentID)
+	lNextStatus := zap.String("next_status", nextStatus)
+
+	log.Info("Payment: Processing payment status transition", lPaymentID, lNextStatus)
+
 	if s.orderStatusUpdater == nil {
+		log.Error("Payment: Order status updater is not configured", lPaymentID, lNextStatus, zap.Error(ErrOrderStatusUpdaterNotSet))
 		return ErrOrderStatusUpdaterNotSet
 	}
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
+		log.Error("Payment: Failed to begin transaction for payment processing", lPaymentID, lNextStatus, zap.Error(err))
 		return err
 	}
 	defer tx.Rollback(ctx)
@@ -215,10 +301,18 @@ func (s *Service) processPayment(
 
 	payment, err := paymentRepo.GetByID(ctx, paymentID)
 	if err != nil {
+		log.Error("Payment: Failed to get payment", lPaymentID, lNextStatus, zap.Error(err))
 		return err
 	}
 
 	if payment.Status != StatusPending {
+		log.Warn(
+			"Payment: Payment is not pending",
+			lPaymentID,
+			zap.String("current_status", payment.Status),
+			lNextStatus,
+			zap.Error(ErrInvalidStatus),
+		)
 		return ErrInvalidStatus
 	}
 
@@ -229,31 +323,93 @@ func (s *Service) processPayment(
 	}
 
 	if err := paymentRepo.UpdateStatus(ctx, paymentID, nextStatus, paidAt); err != nil {
+		log.Error(
+			"Payment: Failed to update payment status",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+			lNextStatus,
+			zap.Error(err),
+		)
 		return err
 	}
 
+	log.Info(
+		"Payment: Payment status updated",
+		lPaymentID,
+		zap.String("order_id", payment.OrderID.String()),
+		zap.String("previous_status", payment.Status),
+		lNextStatus,
+	)
+
 	if afterUpdate != nil {
 		if err := afterUpdate(tx, payment); err != nil {
+			log.Error(
+				"Payment: Failed to run post-payment update",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				lNextStatus,
+				zap.Error(err),
+			)
 			return err
 		}
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		log.Error(
+			"Payment: Failed to commit payment processing transaction",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+			lNextStatus,
+			zap.Error(err),
+		)
+		return err
+	}
+
+	log.Info(
+		"Payment: Payment processing completed",
+		lPaymentID,
+		zap.String("order_id", payment.OrderID.String()),
+		lNextStatus,
+	)
+
+	return nil
 }
 
 func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest) error {
+	log := helper.LoggerFromCtx(ctx)
+	lPaymentID := zap.String("payment_id", req.PaymentID)
+	lRequestedStatus := zap.String("requested_status", req.Status)
+
+	log.Info("Payment: Handling payment callback", lPaymentID, lRequestedStatus)
 
 	status, err := normalizeStatus(req.Status)
 	if err != nil {
+		log.Warn("Payment: Invalid callback status", lPaymentID, lRequestedStatus, zap.Error(err))
 		return err
 	}
+
+	log.Info("Payment: Callback status normalized", lPaymentID, lRequestedStatus, zap.String("normalized_status", status))
 
 	switch status {
 	case StatusSuccess:
 		return s.processCallback(ctx, req.PaymentID, StatusSuccess, func(tx pgx.Tx, payment *Payment) error {
 			if err := s.orderStatusUpdater.ConfirmOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+				log.Error(
+					"Payment: Failed to confirm order stock during callback",
+					lPaymentID,
+					zap.String("order_id", payment.OrderID.String()),
+					zap.String("normalized_status", status),
+					zap.Error(err),
+				)
 				return err
 			}
+
+			log.Info(
+				"Payment: Order stock confirmed during callback",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				zap.String("normalized_status", status),
+			)
 
 			return s.orderStatusUpdater.UpdateOrderStatusWithTx(
 				ctx,
@@ -265,8 +421,22 @@ func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest
 	case StatusFailed:
 		return s.processCallback(ctx, req.PaymentID, StatusFailed, func(tx pgx.Tx, payment *Payment) error {
 			if err := s.orderStatusUpdater.ReleaseOrderStockWithTx(ctx, tx, payment.OrderID.String()); err != nil {
+				log.Error(
+					"Payment: Failed to release order stock during callback",
+					lPaymentID,
+					zap.String("order_id", payment.OrderID.String()),
+					zap.String("normalized_status", status),
+					zap.Error(err),
+				)
 				return err
 			}
+
+			log.Info(
+				"Payment: Order stock released during callback",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				zap.String("normalized_status", status),
+			)
 
 			return s.orderStatusUpdater.UpdateOrderStatusWithTx(
 				ctx,
@@ -286,12 +456,20 @@ func (s *Service) processCallback(
 	nextStatus string,
 	afterUpdate func(tx pgx.Tx, payment *Payment) error,
 ) error {
+	log := helper.LoggerFromCtx(ctx)
+	lPaymentID := zap.String("payment_id", paymentID)
+	lNextStatus := zap.String("next_status", nextStatus)
+
+	log.Info("Payment: Processing callback status transition", lPaymentID, lNextStatus)
+
 	if s.orderStatusUpdater == nil {
+		log.Error("Payment: Order status updater is not configured for callback", lPaymentID, lNextStatus, zap.Error(ErrOrderStatusUpdaterNotSet))
 		return ErrOrderStatusUpdaterNotSet
 	}
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
+		log.Error("Payment: Failed to begin callback transaction", lPaymentID, lNextStatus, zap.Error(err))
 		return err
 	}
 	defer tx.Rollback(ctx)
@@ -300,13 +478,30 @@ func (s *Service) processCallback(
 
 	payment, err := paymentRepo.GetByIDForUpdate(ctx, paymentID)
 	if err != nil {
+		log.Error("Payment: Failed to get payment for update during callback", lPaymentID, lNextStatus, zap.Error(err))
 		return err
 	}
 
 	if payment.Status != StatusPending {
 		if payment.Status == StatusExpired && nextStatus == StatusSuccess { // late payment
+			log.Warn(
+				"Payment: Late payment callback received for expired payment",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				zap.String("current_status", payment.Status),
+				lNextStatus,
+				zap.Error(ErrPaymentExpired),
+			)
 			return ErrPaymentExpired
 		}
+
+		log.Info(
+			"Payment: Callback ignored because payment is already finalized",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+			zap.String("current_status", payment.Status),
+			lNextStatus,
+		)
 		return nil
 	}
 
@@ -317,16 +512,56 @@ func (s *Service) processCallback(
 	}
 
 	if err := paymentRepo.UpdateStatus(ctx, paymentID, nextStatus, paidAt); err != nil {
+		log.Error(
+			"Payment: Failed to update payment status during callback",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+			lNextStatus,
+			zap.Error(err),
+		)
 		return err
 	}
 
+	log.Info(
+		"Payment: Payment status updated during callback",
+		lPaymentID,
+		zap.String("order_id", payment.OrderID.String()),
+		zap.String("previous_status", payment.Status),
+		lNextStatus,
+	)
+
 	if afterUpdate != nil {
 		if err := afterUpdate(tx, payment); err != nil {
+			log.Error(
+				"Payment: Failed to run post-callback update",
+				lPaymentID,
+				zap.String("order_id", payment.OrderID.String()),
+				lNextStatus,
+				zap.Error(err),
+			)
 			return err
 		}
 	}
 
-	return tx.Commit(ctx)
+	if err := tx.Commit(ctx); err != nil {
+		log.Error(
+			"Payment: Failed to commit callback transaction",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+			lNextStatus,
+			zap.Error(err),
+		)
+		return err
+	}
+
+	log.Info(
+		"Payment: Callback processing completed",
+		lPaymentID,
+		zap.String("order_id", payment.OrderID.String()),
+		lNextStatus,
+	)
+
+	return nil
 }
 
 func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) {
@@ -338,9 +573,15 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 }
 
 func (s *Service) AddPaymentRecon(ctx context.Context, req PaymentCallbackRequest) error {
+	log := helper.LoggerFromCtx(ctx)
+	lPaymentID := zap.String("payment_id", req.PaymentID)
+	lRequestedStatus := zap.String("requested_status", req.Status)
+
+	log.Info("Payment: Adding payment reconciliation entry", lPaymentID, lRequestedStatus)
 
 	pid, err := uuid.Parse(req.PaymentID)
 	if err != nil {
+		log.Error("Payment: Failed to parse payment ID for reconciliation", lPaymentID, lRequestedStatus, zap.Error(err))
 		return err
 	}
 
@@ -355,9 +596,25 @@ func (s *Service) AddPaymentRecon(ctx context.Context, req PaymentCallbackReques
 
 	err = s.repo.AddPaymentRecon(ctx, reconData)
 	if err != nil {
+		log.Error(
+			"Payment: Failed to add payment reconciliation entry",
+			lPaymentID,
+			lRequestedStatus,
+			zap.String("recon_status", reconData.Status),
+			zap.String("remark", reconData.Remark),
+			zap.Error(err),
+		)
 		err = errors.New("Something Wrong")
 		return err
 	}
+
+	log.Info(
+		"Payment: Payment reconciliation entry added",
+		lPaymentID,
+		lRequestedStatus,
+		zap.String("recon_status", reconData.Status),
+		zap.String("remark", reconData.Remark),
+	)
 
 	return nil
 }

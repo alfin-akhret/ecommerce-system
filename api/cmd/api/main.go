@@ -21,6 +21,11 @@ func main() {
 
 	r := chi.NewRouter()
 
+	// create new logger
+	logger := helper.NewLogger()
+	r.Use(helper.RequestIDMiddleware)
+	r.Use(helper.LoggerMiddleware(logger))
+
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := w.Write([]byte("OK cool")); err != nil {
 			log.Printf("health write failed: %v", err)
