@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 type Service struct {
@@ -54,10 +55,26 @@ func (s *Service) CreatePayment(ctx context.Context, orderID string, amount int6
 }
 
 func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount int64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+	log := helper.LoggerFromCtx(ctx)
+	lOrderID := zap.String("order_id", orderID)
+	lAmount := zap.Int64("amount", amount)
+	lPaymentMethod := zap.String("payment_method", paymentMethod)
+
+	log.Info("Payment: Creating payment with transaction", lOrderID, lAmount, lPaymentMethod)
+
 	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
 	if err != nil {
+		log.Error("Payment: Failed to create payment with transaction", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
+
+	log.Info(
+		"Payment: Payment created with transaction",
+		lOrderID,
+		zap.String("payment_id", resp.ID),
+		lAmount,
+		lPaymentMethod,
+	)
 
 	return &contracts.PaymentCreateResult{
 		ID:         resp.ID,
@@ -88,16 +105,26 @@ func (s *Service) GetPaymentByOrderID(ctx context.Context, orderID string) (*Pay
 }
 
 func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID string, amount int64, paymentMethod string) (*CreatePaymentResponse, error) {
+	log := helper.LoggerFromCtx(ctx)
+	lOrderID := zap.String("order_id", orderID)
+	lAmount := zap.Int64("amount", amount)
+	lPaymentMethod := zap.String("payment_method", paymentMethod)
+
+	log.Info("Payment: Creating payment", lOrderID, lAmount, lPaymentMethod)
+
 	if amount <= 0 {
+		log.Warn("Payment: Invalid payment amount", lOrderID, lAmount, lPaymentMethod, zap.Error(ErrInvalidAmount))
 		return nil, ErrInvalidAmount
 	}
 	if strings.TrimSpace(paymentMethod) == "" {
+		log.Warn("Payment: Payment method is required", lOrderID, lAmount, lPaymentMethod, zap.Error(ErrInvalidPaymentMethod))
 		return nil, ErrInvalidPaymentMethod
 	}
 
 	paymentID := uuid.New()
 	orderUUID, err := uuid.Parse(orderID)
 	if err != nil {
+		log.Error("Payment: Failed to parse order ID", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
 
@@ -113,10 +140,27 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	}
 
 	if err := repo.CreatePayment(ctx, p); err != nil {
+		log.Error(
+			"Payment: Failed to create payment",
+			lOrderID,
+			zap.String("payment_id", paymentID.String()),
+			lAmount,
+			lPaymentMethod,
+			zap.Error(err),
+		)
 		return nil, err
 	}
 
 	paymentURL := paymentURL + paymentID.String()
+
+	log.Info(
+		"Payment: Payment created",
+		lOrderID,
+		zap.String("payment_id", paymentID.String()),
+		lAmount,
+		lPaymentMethod,
+		zap.Time("expired_at", expiredAt),
+	)
 
 	return &CreatePaymentResponse{
 		ID:            paymentID.String(),

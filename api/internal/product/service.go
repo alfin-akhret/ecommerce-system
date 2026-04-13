@@ -5,9 +5,11 @@ import (
 	"errors"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.uber.org/zap"
 )
 
 var ErrNotEnoughStock = errors.New("not enough stock")
@@ -121,21 +123,43 @@ func (s *Service) ReserveStock(ctx context.Context, productID string, qty int) e
 }
 
 func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	log := helper.LoggerFromCtx(ctx)
+	lProductID := zap.String("product_id", productID)
+	lQty := zap.Int("qty", qty)
+
+	log.Info("Product: Reserving stock", lProductID, lQty)
+
 	repo := s.repo.WithTx(tx)
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
 	if err != nil {
+		log.Error("Product: Failed to get inventory for update", lProductID, lQty, zap.Error(err))
 		return err
 	}
 
 	available := inv.Stock - inv.Reserved
 
 	if available < qty {
+		log.Warn(
+			"Product: Not enough stock to reserve",
+			lProductID,
+			lQty,
+			zap.Int("available_stock", available),
+			zap.Error(ErrNotEnoughStock),
+		)
 		return ErrNotEnoughStock
 	}
 
 	if err := repo.UpdateReserved(ctx, productID, qty); err != nil {
+		log.Error("Product: Failed to update reserved stock", lProductID, lQty, zap.Error(err))
 		return err
 	}
+
+	log.Info(
+		"Product: Stock reserved",
+		lProductID,
+		lQty,
+		zap.Int("available_stock", available-qty),
+	)
 
 	return nil
 }
