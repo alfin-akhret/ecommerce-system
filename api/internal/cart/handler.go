@@ -133,6 +133,9 @@ func (h *Handler) GetCart(w http.ResponseWriter, r *http.Request) error {
 
 	resp, err := h.service.Get(ctx, ownerID)
 	if err != nil {
+		if err == ErrCartNotFound {
+			return helper.NewHTTPError(http.StatusNotFound, err.Error())
+		}
 		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
