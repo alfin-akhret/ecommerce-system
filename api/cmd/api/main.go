@@ -9,6 +9,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 
 	"github.com/go-chi/chi"
 )
@@ -23,15 +24,22 @@ func main() {
 
 	// create new logger
 	logger := helper.NewLogger()
+
+	// register middlewares
 	r.Use(helper.RecoveryMiddleware(logger))
 	r.Use(helper.RequestIDMiddleware)
 	r.Use(helper.LoggerMiddleware(logger))
+	r.Use(helper.MetricsMiddleware)
 
+	// health check endpoint
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := w.Write([]byte("OK cool")); err != nil {
 			log.Printf("health write failed: %v", err)
 		}
 	})
+
+	// metrics endpoint for prometheus
+	r.Handle("/metrics", promhttp.Handler())
 
 	r.Get("/users/{id}", helper.Handle(application.UserHandler.GetUser))
 	r.Post("/register", helper.Handle(application.UserHandler.Register))
