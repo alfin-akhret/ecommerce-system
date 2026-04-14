@@ -15,11 +15,18 @@
     - unique constraint di payment_id (dari gateway)  - implementasi request signature verification, jadi request dipastikan valid dari gateway. ✅
     - ~~atau idempotency table khusus payment:~~ ini diimplementasikan menggunakan pesismistic locking (select... for update) di db karena alurnya update jadi bukan create new record. ✅
 
-1. **Payment vs Worker Race Condition Visibility**
+3. **Payment vs Worker Race Condition Visibility**
 - Saat ini: silent ignore
 -  Tambahin:
-    - logging event LATE_PAYMENT (ini disimpan ke table payment_recon) ✅
+    - logging event LATE_PAYMENT (ini sudah sekalian dengan semua callback dari payment gateway) ✅
+
+4. Monitoring
     - monitoring / alert : status: ongoing
+    - todo: add:
+        - request counter ✅
+	    - latency histogram
+	    - error counter
+	    - metrics middleware (global) ✅
 
 ### 🟠 MEDIUM PRIORITY (scalability & ops)
 4. **Payment Reconciliation System**
