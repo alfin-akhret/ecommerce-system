@@ -3,6 +3,7 @@ package helper
 import (
 	"context"
 	"net/http"
+	"runtime/debug"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -55,4 +56,31 @@ func LoggerFromCtx(ctx context.Context) *zap.Logger {
 		return NewLogger()
 	}
 	return l
+}
+
+func RecoveryMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			defer func() {
+				if rec := recover(); rec != nil {
+					// ambil request id kalau ada
+					reqID, _ := r.Context().Value(RequestIDKey).(string)
+
+					logger.Error("panic recovered",
+						zap.Any("error", rec),
+						zap.String("request_id", reqID),
+						zap.String("method", r.Method),
+						zap.String("path", r.URL.Path),
+						zap.ByteString("stack trace", debug.Stack()))
+
+					// return response ke client
+					http.Error(w, "internal server error", http.StatusInternalServerError)
+				}
+
+			}()
+
+			next.ServeHTTP(w, r)
+		})
+	}
 }
