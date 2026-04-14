@@ -3,7 +3,7 @@
 ### 🔴 HIGH PRIORITY (impact ke money / user trust)
 
 1. **Late Payment Handling (Post-Cancel)** ✅
-- Current: manual reconciliation
+- Current: manual reconciliation (data di insert ke table payment_recon) ✅
 - Problem: user udah bayar tapi order CANCELLED
 - Future:
     - auto refund atau
@@ -12,14 +12,14 @@
 2. **Payment Idempotency (Webhook)** ✅
 - Pastikan callback payment tidak diproses 2x 
 - Tambahin:
-    - unique constraint di payment_id (dari gateway)
-    - atau idempotency table khusus payment
+    - unique constraint di payment_id (dari gateway)  - implementasi request signature verification, jadi request dipastikan valid dari gateway. ✅
+    - ~~atau idempotency table khusus payment:~~ ini diimplementasikan menggunakan pesismistic locking (select... for update) di db karena alurnya update jadi bukan create new record. ✅
 
-3. **Payment vs Worker Race Condition Visibility**
+1. **Payment vs Worker Race Condition Visibility**
 - Saat ini: silent ignore
 -  Tambahin:
-    - logging event LATE_PAYMENT
-    - monitoring / alert
+    - logging event LATE_PAYMENT (ini disimpan ke table payment_recon) ✅
+    - monitoring / alert : status: ongoing
 
 ### 🟠 MEDIUM PRIORITY (scalability & ops)
 4. **Payment Reconciliation System**
