@@ -23,6 +23,7 @@ func main() {
 
 	// create new logger
 	logger := helper.NewLogger()
+	r.Use(helper.RecoveryMiddleware(logger))
 	r.Use(helper.RequestIDMiddleware)
 	r.Use(helper.LoggerMiddleware(logger))
 
@@ -76,6 +77,9 @@ func main() {
 
 	})
 
+	// panic test
+	r.Get("/panic", PanicHandler)
+
 	// run worker
 	ctx := context.Background()
 
@@ -94,4 +98,8 @@ func main() {
 		log.Fatal(err)
 	}
 
+}
+
+func PanicHandler(w http.ResponseWriter, r *http.Request) {
+	panic("something went terribly wrong")
 }
