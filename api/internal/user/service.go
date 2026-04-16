@@ -62,15 +62,24 @@ func (s *UserService) Login(ctx context.Context, email string, password string) 
 	user, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Error("Auth: invalid credentials", lEmail, zap.Error(ErrInvalidCredentials))
+			log.Error("Auth: invalid credentials",
+				lEmail,
+				zap.String("error_message", ErrInvalidCredentials.Error()),
+			)
 			return nil, ErrInvalidCredentials
 		}
-		log.Error("Auth: error processing user authentication", lEmail, zap.Error(err))
+		log.Error("Auth: error processing user authentication",
+			lEmail,
+			zap.String("error_message", err.Error()),
+		)
 		return nil, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		log.Error("Auth: invalid credentials", lEmail, zap.Error(ErrInvalidCredentials))
+		log.Error("Auth: invalid credentials",
+			lEmail,
+			zap.String("error_message", ErrInvalidCredentials.Error()),
+		)
 		return nil, ErrInvalidCredentials
 	}
 
