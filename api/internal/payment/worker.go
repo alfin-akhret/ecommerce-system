@@ -2,9 +2,12 @@ package payment
 
 import (
 	"context"
-	"log"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"go.uber.org/zap"
 )
 
 type PaymentService interface {
@@ -40,6 +43,8 @@ func NewPaymentExpirationWorker(
 }
 
 func (w *PaymentExpirationWorker) Start(ctx context.Context) {
+	logger := helper.LoggerFromCtx(ctx)
+
 	ctx, cancel := context.WithCancel(ctx)
 	w.cancel = cancel
 
@@ -51,12 +56,12 @@ func (w *PaymentExpirationWorker) Start(ctx context.Context) {
 		defer w.wg.Done()
 		defer ticker.Stop()
 
-		log.Println("[Payment Worker] Payment expiration worker started")
+		logger.Info("[Payment Worker] Payment expiration worker started")
 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("[Payment Worker] stopping payment expiration worker...")
+				logger.Info("[Payment Worker] stopping payment expiration worker...")
 				return
 
 			case <-ticker.C:
@@ -72,24 +77,28 @@ func (w *PaymentExpirationWorker) Stop() {
 	}
 
 	w.wg.Wait()
-	log.Println("[Payment Worker] Payment expiratin worker stopped")
+
+	ctx := context.Background()
+	logger := helper.LoggerFromCtx(ctx)
+	logger.Info("[Payment Worker] Payment expiratin worker stopped")
 }
 
 func (w *PaymentExpirationWorker) run(ctx context.Context) {
-	log.Println("[Payment Worker] running expiration job...")
+	logger := helper.LoggerFromCtx(ctx)
+	logger.Info("[Payment Worker] running expiration job...")
 
 	payments, err := w.service.ExpirePayments(ctx)
 	if err != nil {
-		log.Println("[Payment Worker] failed to expire payments: ", err)
+		logger.Error("[Payment Worker] failed to expire payments: ", zap.Error(err))
 		return
 	}
 
 	if len(payments) == 0 {
-		log.Println("[Payment Worker] No expired payments found")
+		logger.Info("[Payment Worker] No expired payments found")
 		return
 	}
 
-	log.Printf("[Payment Worker]%d payments expired\n", len(payments))
+	logger.Info("[Payment Worker]", zap.String("payment expired", strconv.Itoa(len(payments))))
 
 	for _, p := range payments {
 		event := PaymentExpiredEvent{
@@ -100,13 +109,13 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 		err := w.publisher.Publish(ctx, "payment.expired", event)
 		if err != nil {
-			log.Printf("[Payment Worker] failed publish event for payment %s: %v\n", p.ID, err)
+			logger.Error("[Payment Worker] failed publish event for payment", zap.String("payment_id", p.ID.String()), zap.Error(err))
 
 			// NOTE:
 			// di production → masukin ke retry / outbox
 			continue
 		}
 
-		log.Printf("[Payment Worker] event published for payments %s\n", p.ID)
+		logger.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))
 	}
 }
