@@ -27,15 +27,14 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) error {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
-	log.Info("Auth: Processing user authentication", zap.String("email", req.Email))
+	log.Info("Auth: login attempt", zap.String("email", req.Email))
 
 	account, err := h.userService.Login(ctx, req.Email, req.Password)
 	if err != nil {
 
 		if errors.Is(err, user.ErrInvalidCredentials) {
 			log.Warn("Auth: authentication failed",
-				zap.String("email", req.Email),
-				zap.String("warning_message", err.Error()))
+				zap.String("error_message", err.Error()))
 
 			return helper.NewHTTPError(http.StatusUnauthorized, "invalid credentials")
 		}
@@ -60,7 +59,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) error {
 		Token: token,
 	}
 
-	log.Info("Auth: authentication succeed", zap.String("email", req.Email))
+	log.Info("Auth: login succeeded",
+		zap.String("email", req.Email),
+		zap.String("user_id", account.ID.String()))
 
 	helper.WriteSuccess(w, http.StatusOK, resp)
 	return nil
