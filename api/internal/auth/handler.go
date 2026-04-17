@@ -22,16 +22,21 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) error {
 	var req user.LoginRequest
 
 	log := helper.LoggerFromCtx(ctx)
-	log.Info("Auth: Processing user authentication", zap.String("email", req.Email))
 
 	if err := helper.DecodeJSON(r, &req); err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
+	log.Info("Auth: Processing user authentication", zap.String("email", req.Email))
+
 	account, err := h.userService.Login(ctx, req.Email, req.Password)
 	if err != nil {
 
 		if errors.Is(err, user.ErrInvalidCredentials) {
+			log.Warn("Auth: authentication failed",
+				zap.String("email", req.Email),
+				zap.String("warning_message", err.Error()))
+
 			return helper.NewHTTPError(http.StatusUnauthorized, "invalid credentials")
 		}
 
