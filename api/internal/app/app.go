@@ -30,7 +30,6 @@ type App struct {
 
 func New() (*App, error) {
 	cfg := config.Load()
-	log.Printf("[Config] DATABASE_URL=%s\n", cfg.DBUrl)
 
 	db, err := database.NewPostgres(cfg.DBUrl)
 	if err != nil {

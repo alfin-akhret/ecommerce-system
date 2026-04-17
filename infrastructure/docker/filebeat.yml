@@ -8,6 +8,10 @@ setup.kibana:
 
 processors:
   - add_docker_metadata: {}
+  - decode_json_fields:
+      fields: ["message"]
+      target: ""
+      overwrite_keys: true
 
 output.elasticsearch:
   hosts: ["http://elasticsearch:9200"]

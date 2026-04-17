@@ -1,0 +1,15 @@
+services:
+  app:
+    build:
+      context: ../../api
+      dockerfile: Dockerfile.dev
+    container_name: ecommerce-app
+    volumes:
+      - ../../api:/app
+    environment:
+      - PORT=8080
+      - DATABASE_URL=postgres://postgres:postgres@postgres:5432/ecommerce
+      - REDIS_ADDR=redis:6379
+    depends_on:
+      - postgres
+      - redis
