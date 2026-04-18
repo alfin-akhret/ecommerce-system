@@ -26,6 +26,7 @@ func main() {
 	r.Use(helper.RecoveryMiddleware(logger))
 	r.Use(helper.RequestIDMiddleware)
 	r.Use(helper.LoggerMiddleware(logger))
+	r.Use(helper.AccessLogMiddleware(logger))
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		if _, err := w.Write([]byte("OK cool")); err != nil {
