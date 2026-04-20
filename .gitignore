@@ -27,3 +27,5 @@ vendor/
 *.pages
 
 /api/tmp/
+
+*postman_collection.json

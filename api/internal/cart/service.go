@@ -114,16 +114,30 @@ func (s *CartService) DeleteCart(ctx context.Context, ownerID uuid.UUID) (string
 }
 
 func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, productID uuid.UUID) (string, error) {
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Cart: removing item from cart")
+
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
+		log.Warn("Cart: not found",
+			zap.String("owner_id", ownerID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
 	if err := cart.RemoveItem(productID); err != nil {
+		log.Warn("Cart: item not found",
+			zap.String("product_id", productID.String()),
+			zap.String("error_message", err.Error()))
 		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
+		log.Error("Cart: save failed",
+			zap.String("product_id", productID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
@@ -133,6 +147,9 @@ func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, product
 }
 
 func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Cart: updatig item quantity")
+
 	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
 		return "", err
@@ -140,14 +157,25 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
+		log.Warn("Cart: not found",
+			zap.String("owner_id", ownerID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", errors.New("cart not found")
 	}
 
 	if err := cart.UpdateQuantity(pid, qty); err != nil {
+		log.Warn("Cart: item not found",
+			zap.String("product_id", pid.String()),
+			zap.String("error_message", err.Error()))
 		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
+		log.Error("Cart: save failed",
+			zap.String("product_id", pid.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
