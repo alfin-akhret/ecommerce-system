@@ -555,7 +555,7 @@ func (s *Service) processCallback(
 	}
 
 	log.Info(
-		"Payment: Callback processing completed",
+		"Payment: Callback completed",
 		lPaymentID,
 		zap.String("order_id", payment.OrderID.String()),
 		lNextStatus,

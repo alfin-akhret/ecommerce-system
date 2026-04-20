@@ -8,6 +8,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type CartService struct {
@@ -25,17 +26,35 @@ func NewCartService(repo CartUpdater, product contracts.ProductManager) *CartSer
 var ErrCartNotFound = errors.New("cart not found")
 
 func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
+	log := helper.LoggerFromCtx(ctx)
+	lOwnerID := zap.String("owner_id", ownerID.String())
 
 	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
+		log.Warn(
+			"Cart: invalid add item request",
+			lOwnerID,
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
+
+	lProductID := zap.String("product_id", pid.String())
+	lQty := zap.Int("qty", qty)
 
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
 		if errors.Is(err, ErrCartNotFound) {
 			cart, _ = NewCart(ownerID)
+			log.Info("Cart: Created new cart", lOwnerID)
 		} else {
+			log.Error(
+				"Cart: Failed to get cart",
+				lOwnerID,
+				lProductID,
+				lQty,
+				zap.String("error_message", err.Error()),
+			)
 			return "", err
 		}
 	}
@@ -43,6 +62,13 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 	// get product price
 	product, err := s.product.GetProductPrice(ctx, pid.String())
 	if err != nil {
+		log.Error(
+			"Cart: Failed to get product price",
+			lOwnerID,
+			lProductID,
+			lQty,
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
@@ -53,12 +79,28 @@ func (s *CartService) AddItem(ctx context.Context, ownerID uuid.UUID, itemReq Ad
 	}
 
 	if err := cart.AddItem(cartItem.ProductID, cartItem.Qty, cartItem.Price); err != nil {
+		log.Error(
+			"Cart: Failed to add item to cart",
+			lOwnerID,
+			lProductID,
+			lQty,
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
+		log.Error(
+			"Cart: Failed to save cart",
+			lOwnerID,
+			lProductID,
+			lQty,
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
+
+	log.Info("Cart: Item added", lOwnerID, lProductID, lQty)
 
 	return "cart updated", nil
 }
@@ -72,16 +114,30 @@ func (s *CartService) DeleteCart(ctx context.Context, ownerID uuid.UUID) (string
 }
 
 func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, productID uuid.UUID) (string, error) {
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Cart: removing item from cart")
+
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
+		log.Warn("Cart: not found",
+			zap.String("owner_id", ownerID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
 	if err := cart.RemoveItem(productID); err != nil {
+		log.Warn("Cart: item not found",
+			zap.String("product_id", productID.String()),
+			zap.String("error_message", err.Error()))
 		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
+		log.Error("Cart: save failed",
+			zap.String("product_id", productID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
@@ -91,6 +147,9 @@ func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, product
 }
 
 func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, itemReq AddCartItemRequest) (string, error) {
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Cart: updatig item quantity")
+
 	pid, qty, err := parseCartItemRequest(itemReq)
 	if err != nil {
 		return "", err
@@ -98,14 +157,25 @@ func (s *CartService) UpdateQuantity(ctx context.Context, ownerID uuid.UUID, ite
 
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
+		log.Warn("Cart: not found",
+			zap.String("owner_id", ownerID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", errors.New("cart not found")
 	}
 
 	if err := cart.UpdateQuantity(pid, qty); err != nil {
+		log.Warn("Cart: item not found",
+			zap.String("product_id", pid.String()),
+			zap.String("error_message", err.Error()))
 		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
+		log.Error("Cart: save failed",
+			zap.String("product_id", pid.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 

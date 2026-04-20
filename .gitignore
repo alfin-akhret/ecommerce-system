@@ -25,3 +25,7 @@ vendor/
 
 # local docs
 *.pages
+
+/api/tmp/
+
+*postman_collection.json

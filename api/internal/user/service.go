@@ -4,10 +4,8 @@ import (
 	"context"
 	"errors"
 
-	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"go.uber.org/zap"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -54,27 +52,19 @@ func (s *UserService) createUser(ctx context.Context, name string, email string,
 }
 
 func (s *UserService) Login(ctx context.Context, email string, password string) (*User, error) {
-	log := helper.LoggerFromCtx(ctx)
-	lEmail := zap.String("email", email)
-
-	log.Info("Auth: Processing user authentication", lEmail)
 
 	user, err := s.repo.GetByEmail(ctx, email)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			log.Error("Auth: invalid credentials", lEmail, zap.Error(ErrInvalidCredentials))
 			return nil, ErrInvalidCredentials
 		}
-		log.Error("Auth: error processing user authentication", lEmail, zap.Error(err))
+
 		return nil, err
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)); err != nil {
-		log.Error("Auth: invalid credentials", lEmail, zap.Error(ErrInvalidCredentials))
 		return nil, ErrInvalidCredentials
 	}
-
-	log.Info("Auth: User authenticated", lEmail, zap.String("user_id", user.ID.String()))
 
 	return user, nil
 }

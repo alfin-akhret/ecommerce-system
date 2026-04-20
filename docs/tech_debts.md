@@ -91,5 +91,8 @@
     - ga tergantung sync flow
 
 
-benerin semua log:
+12. benerin semua log:
 banyak juga log.Println, log.Printf, fmt.Println di file lain, ini output plain text, jadikan json pake zap
+
+13. log retention policy and implementation
+

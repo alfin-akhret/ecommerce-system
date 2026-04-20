@@ -2,9 +2,12 @@ package order
 
 import (
 	"context"
-	"log"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"go.uber.org/zap"
 )
 
 type OrderService interface {
@@ -32,6 +35,8 @@ func NewIdempotencyKeyDeleteWorker(
 }
 
 func (w *IdempotencyKeyDeleteWorker) Start(ctx context.Context) {
+	logger := helper.LoggerFromCtx(ctx)
+
 	ctx, cancel := context.WithCancel(ctx)
 	w.cancel = cancel
 
@@ -43,12 +48,12 @@ func (w *IdempotencyKeyDeleteWorker) Start(ctx context.Context) {
 		defer w.wg.Done()
 		defer ticker.Stop()
 
-		log.Println("[Order iKey Worker] Order Idempotency Key deletion worker starter")
+		logger.Info("[Order iKey Worker] Order Idempotency Key deletion worker started")
 
 		for {
 			select {
 			case <-ctx.Done():
-				log.Println("[Order iKey Worker] Stoping Order Idempotency Key deletion worker")
+				logger.Info("[Order iKey Worker] Stoping Order Idempotency Key deletion worker")
 				return
 			case <-ticker.C:
 				w.run(ctx)
@@ -63,26 +68,27 @@ func (w *IdempotencyKeyDeleteWorker) Stop() {
 		w.cancel()
 	}
 	w.wg.Wait()
-	log.Println("[Order iKey Worker] Order Idempotency Deletion Worker stopped")
 }
 
 func (w *IdempotencyKeyDeleteWorker) run(ctx context.Context) {
-	log.Println("[Order iKey Worker] Running key deletion job...")
+	logger := helper.LoggerFromCtx(ctx)
+
+	logger.Info("[Order iKey Worker] Running key deletion job...")
 
 	keys, err := w.service.DeleteIdempotencyKey(ctx, w.batchSize)
 	if err != nil {
-		log.Println("[Order iKey Worker] Failed to delete order idempotency keys")
+		logger.Error("[Order iKey Worker] Failed to delete order idempotency keys")
 		return
 	}
 
 	if len(keys) == 0 {
-		log.Println("[Order iKey Worker] No expire idempotency keys found")
+		logger.Info("[Order iKey Worker] No expire idempotency keys found")
 		return
 	}
 
-	log.Println("[Order iKey Worker] Keys deleted: ", len(keys))
+	logger.Info("[Order iKey Worker] Keys deleted", zap.String("Key num", strconv.Itoa(len(keys))))
 
 	for _, val := range keys {
-		log.Printf("Key: %v\n", val)
+		logger.Info("[Order iKey Worker]", zap.String("key", val.Key.String()))
 	}
 }

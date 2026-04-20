@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"runtime/debug"
+	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -13,6 +14,9 @@ func NewLogger() *zap.Logger {
 	logger, _ := zap.NewProduction()
 	return logger
 }
+
+// Request ID Middleware
+// Inject request ID to request context
 
 type contextKey string
 
@@ -31,6 +35,10 @@ func RequestIDMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }
+
+// Logger middleware
+// Inject logger to the request context
+// the logger also contain the request ID
 
 type loggerKey string
 
@@ -81,6 +89,47 @@ func RecoveryMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 			}()
 
 			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+// Access Log middleware
+// to log incoming request and response
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
+
+func AccessLogMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			start := time.Now()
+
+			rec := &statusRecorder{
+				ResponseWriter: w,
+				status:         http.StatusOK,
+			}
+
+			next.ServeHTTP(rec, r)
+
+			reqID, _ := r.Context().Value(RequestIDKey).(string)
+
+			logger.Info("http request completed",
+				zap.String("request_id", reqID),
+				zap.String("method", r.Method),
+				zap.String("path", r.URL.Path),
+				zap.Int("status_code", rec.status),
+				zap.Int64("duration_ms", time.Since(start).Milliseconds()),
+				zap.String("remote_ip", r.RemoteAddr),
+				zap.String("user_agent", r.UserAgent()),
+			)
+
 		})
 	}
 }

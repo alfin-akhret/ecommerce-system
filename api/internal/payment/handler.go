@@ -2,7 +2,6 @@ package payment
 
 import (
 	"bytes"
-	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -89,7 +88,7 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
 	}
 	signature := r.Header.Get("X-Signature")
 
-	ctx := context.Background()
+	ctx := r.Context()
 	secret, err := h.service.repo.GetSecret(ctx, "payment_hmac_secret_key")
 	if err != nil {
 		return err

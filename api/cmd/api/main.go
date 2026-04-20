@@ -29,6 +29,7 @@ func main() {
 	r.Use(helper.RecoveryMiddleware(logger))
 	r.Use(helper.RequestIDMiddleware)
 	r.Use(helper.LoggerMiddleware(logger))
+	r.Use(helper.AccessLogMiddleware(logger))
 	r.Use(helper.MetricsMiddleware)
 
 	// health check endpoint

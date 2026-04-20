@@ -50,6 +50,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     depends_on:
       - elasticsearch
+    command: [ "filebeat", "-e", "-d", "elasticsearch" ]
 
   app:
     build:
