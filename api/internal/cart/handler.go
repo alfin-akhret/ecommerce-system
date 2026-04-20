@@ -1,6 +1,7 @@
 package cart
 
 import (
+	"errors"
 	"net/http"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
@@ -67,12 +68,14 @@ func (h *Handler) DeleteCart(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h *Handler) RemoveItem(w http.ResponseWriter, r *http.Request) error {
+
 	productID, err := uuid.Parse(chi.URLParam(r, "product_id"))
 	if err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, "invalid product id")
 	}
 
 	ctx := r.Context()
+
 	userID, ok := auth.GetUserID(ctx)
 	if !ok {
 		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
@@ -85,6 +88,7 @@ func (h *Handler) RemoveItem(w http.ResponseWriter, r *http.Request) error {
 
 	resp, err := h.service.RemoveItem(ctx, ownerID, productID)
 	if err != nil {
+		err = errors.New("Cart: failed removing item")
 		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

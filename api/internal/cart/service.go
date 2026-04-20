@@ -114,16 +114,29 @@ func (s *CartService) DeleteCart(ctx context.Context, ownerID uuid.UUID) (string
 }
 
 func (s *CartService) RemoveItem(ctx context.Context, ownerID uuid.UUID, productID uuid.UUID) (string, error) {
+	log := helper.LoggerFromCtx(ctx)
+
 	cart, err := s.repo.Get(ctx, ownerID)
 	if err != nil {
+		log.Warn("Cart: not found",
+			zap.String("owner_id", ownerID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
 	if err := cart.RemoveItem(productID); err != nil {
+		log.Warn("Cart: failed removing item from cart",
+			zap.String("product_id", productID.String()),
+			zap.String("error_message", err.Error()))
 		return "", err
 	}
 
 	if err := s.repo.Save(ctx, cart); err != nil {
+		log.Error("Cart: save failed",
+			zap.String("product_id", productID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return "", err
 	}
 
