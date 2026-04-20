@@ -63,7 +63,7 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
 	}
 
 	idempotencyKey := r.Header.Get("Idempotency-Key")
-	idempotencyResp, err := h.service.checkIdempotency(r.Context(), userID, idempotencyKey)
+	idempotencyResp, err := h.service.CheckIdempotency(r.Context(), userID, idempotencyKey)
 	if err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
