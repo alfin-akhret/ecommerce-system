@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
@@ -90,6 +92,13 @@ func main() {
 
 		// panic test
 		r.Get("/panic", PanicHandler)
+
+		// alert test p95:
+		r.Get("/slow", func(w http.ResponseWriter, r *http.Request) {
+			delay := time.Duration(rand.Intn(3000)) * time.Millisecond
+			time.Sleep(delay)
+			w.Write([]byte("ok"))
+		})
 
 	})
 

@@ -29,3 +29,5 @@ vendor/
 /api/tmp/
 
 *postman_collection.json
+
+alertmanager.yml
