@@ -64,6 +64,8 @@ services:
       - PORT=8080
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/ecommerce
       - REDIS_ADDR=redis:6379
+      - OTEL_SERVICE_NAME=ecommerce-api
+      - OTEL_EXPORTER_OTLP_ENDPOINT=jaeger:4317
     depends_on:
       - postgres
       - redis
@@ -97,6 +99,12 @@ services:
       - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml
     ports:
       - "9093:9093"
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    ports:
+      - "16686:16686" # UI
+      - "4317:4317" # OTLP gRPC
 
 volumes:
   postgres_data:
