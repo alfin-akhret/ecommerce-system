@@ -3,9 +3,11 @@ package helper
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"time"
 
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
@@ -61,4 +63,30 @@ func InitTracer(ctx context.Context, serviceName string, otlpEndpoint string) (f
 	}
 
 	return shutdown, nil
+}
+
+func TracingMiddleware(serviceName string) func(http.Handler) http.Handler {
+	tracer := otel.Tracer(serviceName)
+
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+
+			// ambil context dari request (penting)
+			ctx := r.Context()
+
+			// buat span baru
+			ctx, span := tracer.Start(ctx, r.Method+" "+r.URL.Path)
+			defer span.End()
+
+			// inject attribute dasar
+			span.SetAttributes(
+				attribute.String("http.method", r.Method),
+				attribute.String("http.route", r.URL.Path),
+			)
+
+			// lanjut ke handler berikutnya
+			next.ServeHTTP(w, r.WithContext(ctx))
+
+		})
+	}
 }
