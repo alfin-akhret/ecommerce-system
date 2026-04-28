@@ -95,17 +95,6 @@ func RecoveryMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 
 // Access Log middleware
 // to log incoming request and response
-
-type statusRecorder struct {
-	http.ResponseWriter
-	status int
-}
-
-func (r *statusRecorder) WriteHeader(statusCode int) {
-	r.status = statusCode
-	r.ResponseWriter.WriteHeader(statusCode)
-}
-
 func AccessLogMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

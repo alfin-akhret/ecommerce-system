@@ -78,15 +78,20 @@ func TracingMiddleware(serviceName string) func(http.Handler) http.Handler {
 			ctx, span := tracer.Start(ctx, r.Method+" "+r.URL.Path)
 			defer span.End()
 
+			rec := &statusRecorder{
+				ResponseWriter: w,
+				status:         200,
+			}
+
+			// lanjut ke handler berikutnya
+			next.ServeHTTP(rec, r.WithContext(ctx))
+
 			// inject attribute dasar
 			span.SetAttributes(
 				attribute.String("http.method", r.Method),
 				attribute.String("http.route", r.URL.Path),
+				attribute.Int("http.status_code", rec.status),
 			)
-
-			// lanjut ke handler berikutnya
-			next.ServeHTTP(w, r.WithContext(ctx))
-
 		})
 	}
 }

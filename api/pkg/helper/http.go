@@ -32,3 +32,15 @@ func Handle(h AppHandler) http.HandlerFunc {
 		}
 	}
 }
+
+// wrapper for ResponseWriter
+// dipake oleh looger dan tracer middleware
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+}
+
+func (r *statusRecorder) WriteHeader(statusCode int) {
+	r.status = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
+}
