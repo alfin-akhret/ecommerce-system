@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 )
 
@@ -48,8 +49,17 @@ func LoggerMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 
+			// add tracer span and tracer span context; see helper/tracer.go
+			span := trace.SpanFromContext(r.Context())
+			spanCtx := span.SpanContext()
+			traceID := spanCtx.TraceID().String()
+			spanID := spanCtx.SpanID().String()
+
 			reqID := r.Context().Value(RequestIDKey).(string)
-			l := logger.With(zap.String("request_id", reqID))
+			l := logger.With(zap.String("request_id", reqID),
+				zap.String("trace_id", traceID),
+				zap.String("span_id", spanID),
+			)
 			ctx := context.WithValue(r.Context(), LoggerIDKey, l)
 
 			next.ServeHTTP(w, r.WithContext(ctx))

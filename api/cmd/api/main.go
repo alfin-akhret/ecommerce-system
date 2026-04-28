@@ -59,8 +59,9 @@ func main() {
 	r.Group(func(r chi.Router) {
 
 		// register middlewares
-		r.Use(helper.RecoveryMiddleware(logger))
+		r.Use(helper.TracingMiddleware(application.Config.OTelServiceName))
 		r.Use(helper.RequestIDMiddleware)
+		r.Use(helper.RecoveryMiddleware(logger))
 		r.Use(helper.LoggerMiddleware(logger))
 		r.Use(helper.AccessLogMiddleware(logger))
 		r.Use(helper.MetricsMiddleware)
