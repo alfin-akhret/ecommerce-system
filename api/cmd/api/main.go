@@ -22,10 +22,22 @@ func main() {
 		panic(err)
 	}
 
+	// router
 	r := chi.NewRouter()
 
 	// create new logger
 	logger := helper.NewLogger()
+
+	// tracer
+	rootCtx := context.Background()
+	shutdown, err := helper.InitTracer(rootCtx,
+		application.Config.OTelServiceName,
+		application.Config.OTelExporterEndpoint,
+	)
+	if err != nil {
+		log.Fatalf("failed to init tracer: %v", err)
+	}
+	defer shutdown(rootCtx)
 
 	// metrics endpoint for prometheus
 	r.Handle("/metrics", promhttp.Handler())
@@ -103,7 +115,9 @@ func main() {
 	})
 
 	// run worker
-	ctx := context.Background()
+	// ctx := context.Background()
+	ctx, cancel := context.WithCancel(rootCtx)
+	defer cancel()
 
 	application.PaymentExpirationWorker.Start(ctx)
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
