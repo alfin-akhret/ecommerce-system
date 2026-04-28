@@ -6,6 +6,9 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
@@ -17,19 +20,29 @@ import (
 )
 
 func main() {
+	// === 1. init main Application
 	application, err := app.New()
 	if err != nil {
 		panic(err)
 	}
 
-	// router
+	// === 2. Init router
 	r := chi.NewRouter()
 
-	// create new logger
+	// === 3. Init Logger middleware
 	logger := helper.NewLogger()
 
-	// tracer
-	rootCtx := context.Background()
+	// === 4. Init Tracer
+	// root context mesti gracefully shutdown
+	// karena http.ListenAndServe(...) itu blocking, sementara root context di shutdown menggunakan defer
+	// defer hanya jalan jika function return, masalahnya ini main(), artinya kalau main() return, aplikasi mati
+	// defer bisa jadi ga pernah kepanggil, dan trace span terakhir ga akan terkirim (data loss)
+	// solusi:
+	// 1. dengerin signal (SIGINT, SIGTERM)
+	// 2. stop server
+	// 3. shutdown tracer (flush data)
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 	shutdown, err := helper.InitTracer(rootCtx,
 		application.Config.OTelServiceName,
 		application.Config.OTelExporterEndpoint,
@@ -37,11 +50,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("failed to init tracer: %v", err)
 	}
-	defer shutdown(rootCtx)
 
-	// metrics endpoint for prometheus
+	// === 5. List of routes
+	// metric endpoint, for promotheus scrapper
 	r.Handle("/metrics", promhttp.Handler())
 
+	// main routers
 	r.Group(func(r chi.Router) {
 
 		// register middlewares
@@ -114,24 +128,49 @@ func main() {
 
 	})
 
-	// run worker
-	// ctx := context.Background()
-	ctx, cancel := context.WithCancel(rootCtx)
-	defer cancel()
+	// === 6. Run Workers
+	// create new worker context derived from root context
+	ctx, workerCancel := context.WithCancel(rootCtx)
 
 	application.PaymentExpirationWorker.Start(ctx)
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
 
 	// handle shutdown
-	defer application.PaymentExpirationWorker.Stop()
-	defer application.IdempotencyKeyDeletionWorker.Stop()
 
-	// select {} // block forever (sementara)
+	// === 7. Run HTTP server
+	// jalankan di go routine
+	srv := &http.Server{
+		Addr:    ":" + application.Config.Port,
+		Handler: r,
+	}
 
-	fmt.Println("Server is running on :" + application.Config.Port)
+	go func() {
+		fmt.Println("Server is running on :" + application.Config.Port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("server error: %v", err)
+		}
+	}()
 
-	if err := http.ListenAndServe(":"+application.Config.Port, r); err != nil {
-		log.Fatal(err)
+	// wait shutdown signal
+	<-rootCtx.Done()
+	log.Println("shutting down HTTP Server...")
+
+	// === 8. Shutdown
+	// urutan shutdown PENTING
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer shutdownCancel()
+
+	// ==== 8.1 stop HTTP server
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("server shutdown error: %v", err)
+	}
+
+	// ==== 8.2 stop workers
+	workerCancel()
+
+	// ==== 8.3 shutdown tracer (flush span)
+	if err := shutdown(shutdownCtx); err != nil {
+		log.Printf("tracer shutdown error: %v", err)
 	}
 
 }
