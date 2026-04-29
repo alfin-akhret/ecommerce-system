@@ -91,8 +91,11 @@
     - ga tergantung sync flow
 
 
-12. benerin semua log:
-banyak juga log.Println, log.Printf, fmt.Println di file lain, ini output plain text, jadikan json pake zap
+12. ~~benerin semua log:
+banyak juga log.Println, log.Printf, fmt.Println di file lain, ini output plain text, jadikan json pake zap~~
 
 13. log retention policy and implementation
+14. instrument semua workers
+15. containerize fake-payment-api
+16. instrument fake-payment-api
 
