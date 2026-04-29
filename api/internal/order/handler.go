@@ -8,6 +8,8 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/go-chi/chi"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type Handler struct {
@@ -57,6 +59,13 @@ func (h *Handler) ListOrders(w http.ResponseWriter, r *http.Request) error {
 }
 
 func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
+	ctx := r.Context()
+
+	// add new tracer span
+	tr := otel.Tracer("order-handler")
+	ctx, span := tr.Start(ctx, "CreateOrder")
+	defer span.End()
+
 	userID, ok := auth.GetUserID(r.Context())
 	if !ok {
 		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
@@ -78,8 +87,15 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
 		return helper.NewHTTPError(http.StatusBadRequest, "invalid request")
 	}
 
-	resp, err := h.service.CreateOrder(r.Context(), userID, req, idempotencyKey)
+	// add span attribute
+	span.SetAttributes(
+		attribute.String("user_id", userID),
+	)
+
+	resp, err := h.service.CreateOrder(ctx, userID, req, idempotencyKey)
 	if err != nil {
+		span.SetAttributes(attribute.String("failed create order", err.Error()))
+		span.RecordError(err) // important, biar kelihatan di dashboard jaeger
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
