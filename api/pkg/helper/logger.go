@@ -117,6 +117,12 @@ func AccessLogMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 
 			next.ServeHTTP(rec, r)
 
+			// add tracer span and tracer span context; see helper/tracer.go
+			span := trace.SpanFromContext(r.Context())
+			spanCtx := span.SpanContext()
+			traceID := spanCtx.TraceID().String()
+			spanID := spanCtx.SpanID().String()
+
 			reqID, _ := r.Context().Value(RequestIDKey).(string)
 
 			logger.Info("http request completed",
@@ -127,6 +133,8 @@ func AccessLogMiddleware(logger *zap.Logger) func(http.Handler) http.Handler {
 				zap.Int64("duration_ms", time.Since(start).Milliseconds()),
 				zap.String("remote_ip", r.RemoteAddr),
 				zap.String("user_agent", r.UserAgent()),
+				zap.String("trace_id", traceID),
+				zap.String("span_id", spanID),
 			)
 
 		})
