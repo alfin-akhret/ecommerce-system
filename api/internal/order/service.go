@@ -185,6 +185,10 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 	log := helper.LoggerFromCtx(ctx)
 
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "getCart")
+	defer span.End()
+
 	ownerID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -195,6 +199,8 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 		log.Error("Order: cart not found",
 			zap.String("user_id", userID),
 			zap.String("error_message", err.Error()))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -207,6 +213,8 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 			log.Error("Order: failed getting product price",
 				zap.String("product_id", product.GetID().String()),
 				zap.String("error_message", err.Error()))
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		}
 
@@ -399,8 +407,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 
 	span.SetAttributes(
-		attribute.String("order.id", orderRespnse.OrderID),
-		attribute.String("user.id", userID),
+		attribute.String("order_id", orderRespnse.OrderID),
+		attribute.String("user_id", userID),
 	)
 
 	log.Info("Order: Order created", lUserID, zap.String("order_id", orderID.String()))

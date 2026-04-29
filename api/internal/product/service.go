@@ -9,6 +9,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -73,10 +76,18 @@ func (s *Service) GetProductByID(ctx context.Context, id string) (*ProductDetail
 }
 
 func (s *Service) GetProductPrice(ctx context.Context, id string) (contracts.ProductView, error) {
+	tr := otel.Tracer("product-service")
+	ctx, span := tr.Start(ctx, "GetProductPrice")
+	defer span.End()
+
 	detail, err := s.repo.GetProductByID(ctx, id)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
+
+	span.SetAttributes(attribute.String("product_id", id))
 
 	return &Product{
 		Price: detail.Price,
@@ -129,9 +140,20 @@ func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 
 	log.Info("Product: Reserving stock", lProductID, lQty)
 
+	tr := otel.Tracer("product-service")
+	ctx, span := tr.Start(ctx, "ReserveStockWithTx")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("product_id", productID),
+		attribute.Int("qty", qty),
+	)
+
 	repo := s.repo.WithTx(tx)
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Product: Failed to get inventory for update", lProductID, lQty, zap.Error(err))
 		return err
 	}
@@ -150,6 +172,8 @@ func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	}
 
 	if err := repo.UpdateReserved(ctx, productID, qty); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Product: Failed to update reserved stock", lProductID, lQty, zap.Error(err))
 		return err
 	}

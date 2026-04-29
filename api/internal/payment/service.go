@@ -11,6 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -62,8 +65,20 @@ func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID st
 
 	log.Info("Payment: Creating payment with transaction", lOrderID, lAmount, lPaymentMethod)
 
+	tr := otel.Tracer("payment-service")
+	ctx, span := tr.Start(ctx, "CreatePaymentWithTx")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("order_id", orderID),
+		attribute.Int64("amount", amount),
+		attribute.String("payment_method", paymentMethod),
+	)
+
 	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to create payment with transaction", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
