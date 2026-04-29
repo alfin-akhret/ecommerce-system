@@ -12,6 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -227,9 +230,15 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 
 	log.Info("Order: Creating order", lUserID)
 
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "CreateOrder")
+	defer span.End()
+
 	// 1. get cart
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to get cart",
 			lUserID, zap.String("error_message", err.Error()))
 		return nil, err
@@ -284,6 +293,9 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 				zap.String("product_id", item.ProductID.String()),
 				zap.String("error_message", err.Error()),
 			)
+
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		}
 
@@ -299,6 +311,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 
 	if err := repo.CreateOrder(ctx, order); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to create order",
 			lUserID, zap.Stack(err.Error()))
 		return nil, err
@@ -306,6 +320,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 
 	for _, orderItem := range orderItems {
 		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			log.Error("Order: Failed to create order item",
 				lUserID, zap.Stack(err.Error()))
 			return nil, err
@@ -317,6 +333,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	if err != nil {
 		log.Error("Order: Failed to create payment",
 			lUserID, zap.Stack(err.Error()))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -337,6 +355,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 			zap.String("order_id", orderID.String()),
 			zap.String("error_message", err.Error()),
 		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -364,6 +384,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 			zap.String("order_id", orderID.String()),
 			zap.String("error_message", err.Error()),
 		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -375,6 +397,11 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		)
 		return nil, err
 	}
+
+	span.SetAttributes(
+		attribute.String("order.id", orderRespnse.OrderID),
+		attribute.String("user.id", userID),
+	)
 
 	log.Info("Order: Order created", lUserID, zap.String("order_id", orderID.String()))
 

@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Handler struct {
@@ -94,8 +95,8 @@ func (h *Handler) CreateOrder(w http.ResponseWriter, r *http.Request) error {
 
 	resp, err := h.service.CreateOrder(ctx, userID, req, idempotencyKey)
 	if err != nil {
-		span.SetAttributes(attribute.String("failed create order", err.Error()))
 		span.RecordError(err) // important, biar kelihatan di dashboard jaeger
+		span.SetStatus(codes.Error, err.Error())
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
