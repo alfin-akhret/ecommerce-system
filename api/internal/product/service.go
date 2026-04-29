@@ -204,6 +204,14 @@ func (s *Service) ReleaseStock(ctx context.Context, productID string, qty int) e
 }
 
 func (s *Service) ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	tr := otel.Tracer("product-service")
+	ctx, span := tr.Start(ctx, "ReleaseStockWithTx")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("product_id", productID),
+		attribute.Int("qty", qty),
+	)
+
 	repo := s.repo.WithTx(tx)
 
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
@@ -216,6 +224,8 @@ func (s *Service) ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	}
 
 	if err := repo.ReleasedReserved(ctx, productID, qty); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -238,6 +248,11 @@ func (s *Service) ConfirmStock(ctx context.Context, productID string, qty int) e
 }
 
 func (s *Service) ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+
+	tr := otel.Tracer("product-service")
+	ctx, span := tr.Start(ctx, "ConfirmOrderStockWithTx")
+	defer span.End()
+
 	repo := s.repo.WithTx(tx)
 
 	inv, err := repo.GetInventoryForUpdate(ctx, productID)
@@ -250,6 +265,8 @@ func (s *Service) ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	}
 
 	if err := repo.ConfirmStock(ctx, productID, qty); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 

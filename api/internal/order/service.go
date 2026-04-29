@@ -118,6 +118,11 @@ func (s *Service) UpdateStatus(ctx context.Context, orderID string, status strin
 }
 
 func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "ConfirmOrderStockWithTx")
+	defer span.End()
+
 	items, err := s.repo.ListOrderItems(ctx, orderID)
 	if err != nil {
 		return err
@@ -125,6 +130,8 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 
 	for _, item := range items {
 		if err := s.product.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
@@ -133,6 +140,11 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 }
 
 func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "ReleaseOrderStockWithTx")
+	defer span.End()
+
 	repo := s.repo.WithTx(tx)
 
 	items, err := repo.ListOrderItems(ctx, orderID)
@@ -147,6 +159,8 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 			item.ProductID.String(),
 			item.Qty,
 		); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
