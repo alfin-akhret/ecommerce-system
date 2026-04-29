@@ -8,6 +8,8 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/go-chi/chi"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Handler struct {
@@ -82,13 +84,18 @@ func (h *Handler) GetPayment(w http.ResponseWriter, r *http.Request) error {
 // HandleCallback endpoint
 func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
 
+	ctx := r.Context()
+
+	tr := otel.Tracer("payment-service-http-handler")
+	ctx, span := tr.Start(ctx, "HandleCallback")
+	defer span.End()
+
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	signature := r.Header.Get("X-Signature")
 
-	ctx := r.Context()
 	secret, err := h.service.repo.GetSecret(ctx, "payment_hmac_secret_key")
 	if err != nil {
 		return err
@@ -97,6 +104,8 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
 	ok := helper.VerifyHMAC(string(body), secret, signature)
 	if !ok {
 		err := errors.New("Wrong signature")
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 
@@ -110,18 +119,28 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
 	if err := h.service.HandleCallback(ctx, req); err != nil {
 		if errors.Is(err, ErrPaymentExpired) {
 			if err := h.service.AddPaymentRecon(ctx, req); err != nil {
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 			}
 		}
 		if errors.Is(err, ErrInvalidStatus) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return helper.NewHTTPError(http.StatusBadRequest, err.Error())
 		}
 		if errors.Is(err, ErrPaymentNotFound) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return helper.NewHTTPError(http.StatusNotFound, err.Error())
 		}
 		if errors.Is(err, ErrOrderStatusUpdaterNotSet) {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 

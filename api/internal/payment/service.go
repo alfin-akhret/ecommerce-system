@@ -11,6 +11,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -62,8 +65,20 @@ func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID st
 
 	log.Info("Payment: Creating payment with transaction", lOrderID, lAmount, lPaymentMethod)
 
+	tr := otel.Tracer("payment-service")
+	ctx, span := tr.Start(ctx, "CreatePaymentWithTx")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("order_id", orderID),
+		attribute.Int64("amount", amount),
+		attribute.String("payment_method", paymentMethod),
+	)
+
 	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to create payment with transaction", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
@@ -382,6 +397,15 @@ func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest
 
 	log.Info("Payment: Handling payment callback", lPaymentID, lRequestedStatus)
 
+	tr := otel.Tracer("payment-service")
+	ctx, span := tr.Start(ctx, "HandleCallback")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("payment_id", req.PaymentID),
+		attribute.String("status", req.Status),
+	)
+
 	status, err := normalizeStatus(req.Status)
 	if err != nil {
 		log.Warn("Payment: Invalid callback status", lPaymentID, lRequestedStatus, zap.Error(err))
@@ -401,6 +425,8 @@ func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest
 					zap.String("normalized_status", status),
 					zap.Error(err),
 				)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 
@@ -428,6 +454,8 @@ func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest
 					zap.String("normalized_status", status),
 					zap.Error(err),
 				)
+				span.RecordError(err)
+				span.SetStatus(codes.Error, err.Error())
 				return err
 			}
 
@@ -462,6 +490,14 @@ func (s *Service) processCallback(
 
 	log.Info("Payment: Processing callback status transition", lPaymentID, lNextStatus)
 
+	tr := otel.Tracer("payment-service")
+	ctx, span := tr.Start(ctx, "processCallback")
+	defer span.End()
+
+	span.SetAttributes(attribute.String("payment_id", paymentID),
+		attribute.String("payment_next_status", nextStatus),
+	)
+
 	if s.orderStatusUpdater == nil {
 		log.Error("Payment: Order status updater is not configured for callback", lPaymentID, lNextStatus, zap.Error(ErrOrderStatusUpdaterNotSet))
 		return ErrOrderStatusUpdaterNotSet
@@ -478,6 +514,8 @@ func (s *Service) processCallback(
 
 	payment, err := paymentRepo.GetByIDForUpdate(ctx, paymentID)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to get payment for update during callback", lPaymentID, lNextStatus, zap.Error(err))
 		return err
 	}
@@ -492,6 +530,7 @@ func (s *Service) processCallback(
 				lNextStatus,
 				zap.Error(ErrPaymentExpired),
 			)
+
 			return ErrPaymentExpired
 		}
 
@@ -519,6 +558,8 @@ func (s *Service) processCallback(
 			lNextStatus,
 			zap.Error(err),
 		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -539,6 +580,8 @@ func (s *Service) processCallback(
 				lNextStatus,
 				zap.Error(err),
 			)
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}

@@ -12,6 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -115,6 +118,11 @@ func (s *Service) UpdateStatus(ctx context.Context, orderID string, status strin
 }
 
 func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "ConfirmOrderStockWithTx")
+	defer span.End()
+
 	items, err := s.repo.ListOrderItems(ctx, orderID)
 	if err != nil {
 		return err
@@ -122,6 +130,8 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 
 	for _, item := range items {
 		if err := s.product.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
@@ -130,6 +140,11 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 }
 
 func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "ReleaseOrderStockWithTx")
+	defer span.End()
+
 	repo := s.repo.WithTx(tx)
 
 	items, err := repo.ListOrderItems(ctx, orderID)
@@ -144,6 +159,8 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 			item.ProductID.String(),
 			item.Qty,
 		); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return err
 		}
 	}
@@ -182,6 +199,10 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 	log := helper.LoggerFromCtx(ctx)
 
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "getCart")
+	defer span.End()
+
 	ownerID, err := uuid.Parse(userID)
 	if err != nil {
 		return nil, err
@@ -192,6 +213,8 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 		log.Error("Order: cart not found",
 			zap.String("user_id", userID),
 			zap.String("error_message", err.Error()))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -204,6 +227,8 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 			log.Error("Order: failed getting product price",
 				zap.String("product_id", product.GetID().String()),
 				zap.String("error_message", err.Error()))
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		}
 
@@ -227,9 +252,15 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 
 	log.Info("Order: Creating order", lUserID)
 
+	tr := otel.Tracer("order-service")
+	ctx, span := tr.Start(ctx, "CreateOrder")
+	defer span.End()
+
 	// 1. get cart
 	cart, err := s.getCart(ctx, userID)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to get cart",
 			lUserID, zap.String("error_message", err.Error()))
 		return nil, err
@@ -284,6 +315,9 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 				zap.String("product_id", item.ProductID.String()),
 				zap.String("error_message", err.Error()),
 			)
+
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			return nil, err
 		}
 
@@ -299,6 +333,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	}
 
 	if err := repo.CreateOrder(ctx, order); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to create order",
 			lUserID, zap.Stack(err.Error()))
 		return nil, err
@@ -306,6 +342,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 
 	for _, orderItem := range orderItems {
 		if err := repo.CreateOrderItem(ctx, orderItem); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			log.Error("Order: Failed to create order item",
 				lUserID, zap.Stack(err.Error()))
 			return nil, err
@@ -317,6 +355,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	if err != nil {
 		log.Error("Order: Failed to create payment",
 			lUserID, zap.Stack(err.Error()))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -337,6 +377,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 			zap.String("order_id", orderID.String()),
 			zap.String("error_message", err.Error()),
 		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -364,6 +406,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 			zap.String("order_id", orderID.String()),
 			zap.String("error_message", err.Error()),
 		)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return nil, err
 	}
 
@@ -375,6 +419,11 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 		)
 		return nil, err
 	}
+
+	span.SetAttributes(
+		attribute.String("order_id", orderRespnse.OrderID),
+		attribute.String("user_id", userID),
+	)
 
 	log.Info("Order: Order created", lUserID, zap.String("order_id", orderID.String()))
 
