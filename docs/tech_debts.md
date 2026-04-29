@@ -95,7 +95,9 @@
 banyak juga log.Println, log.Printf, fmt.Println di file lain, ini output plain text, jadikan json pake zap~~
 
 13. log retention policy and implementation
-14. instrument semua workers
+14. instrument semua workers:
+    1.  payment worker done.
+    - benerin log worker: include trace id dan span id
 15. containerize fake-payment-api
 16. instrument fake-payment-api
 

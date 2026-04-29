@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -100,7 +103,24 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 	logger.Info("[Payment Worker]", zap.String("payment expired", strconv.Itoa(len(payments))))
 
+	// tracing
+	// root span
+	tr := otel.Tracer("payment-expiration-worker")
+	ctx, span := tr.Start(ctx, "payment.expiration.worker.run")
+	defer span.End()
+	span.SetAttributes(
+		attribute.Int("batch.size", len(payments)),
+	)
+
 	for _, p := range payments {
+		// child span
+		ctx, childSpan := tr.Start(ctx, "payment.expire.process")
+		defer childSpan.End()
+		childSpan.SetAttributes(
+			attribute.String("payment_id", p.ID.String()),
+			attribute.String("order_id", p.OrderID.String()),
+		)
+
 		event := PaymentExpiredEvent{
 			PaymentID: p.ID.String(),
 			OrderID:   p.OrderID.String(),
@@ -109,6 +129,8 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 		err := w.publisher.Publish(ctx, "payment.expired", event)
 		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
 			logger.Error("[Payment Worker] failed publish event for payment", zap.String("payment_id", p.ID.String()), zap.Error(err))
 
 			// NOTE:

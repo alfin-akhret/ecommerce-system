@@ -8,6 +8,8 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/go-chi/chi"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
 )
 
 type Handler struct {
@@ -125,6 +127,11 @@ func (h *Handler) UpdateQuantity(w http.ResponseWriter, r *http.Request) error {
 
 func (h *Handler) GetCart(w http.ResponseWriter, r *http.Request) error {
 	ctx := r.Context()
+
+	tr := otel.Tracer("cart-handler")
+	ctx, span := tr.Start(ctx, "GetCart")
+	defer span.End()
+
 	userID, ok := auth.GetUserID(ctx)
 	if !ok {
 		return helper.NewHTTPError(http.StatusUnauthorized, "missing user")
@@ -140,6 +147,8 @@ func (h *Handler) GetCart(w http.ResponseWriter, r *http.Request) error {
 		if err == ErrCartNotFound {
 			return helper.NewHTTPError(http.StatusNotFound, err.Error())
 		}
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return helper.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
