@@ -57,7 +57,10 @@ func (s *Service) CreatePayment(ctx context.Context, orderID string, amount int6
 	return s.createPayment(ctx, s.repo, orderID, amount, paymentMethod)
 }
 
-func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID string, amount int64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx,
+	orderID string, amount int64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+
+	// logger
 	log := helper.LoggerFromCtx(ctx)
 	lOrderID := zap.String("order_id", orderID)
 	lAmount := zap.Int64("amount", amount)
@@ -65,24 +68,32 @@ func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx, orderID st
 
 	log.Info("Payment: Creating payment with transaction", lOrderID, lAmount, lPaymentMethod)
 
-	tr := otel.Tracer("payment-service")
-	ctx, span := tr.Start(ctx, "CreatePaymentWithTx")
+	// tracer
+	tr := otel.Tracer("payment.service")
+	ctx, span := tr.Start(ctx, "payment.service.CreatePaymentWithTx")
 	defer span.End()
-
 	span.SetAttributes(
 		attribute.String("order_id", orderID),
 		attribute.Int64("amount", amount),
 		attribute.String("payment_method", paymentMethod),
 	)
 
+	// create payment
 	resp, err := s.createPayment(ctx, s.repo.WithTx(tx), orderID, amount, paymentMethod)
 	if err != nil {
+		span.SetAttributes(attribute.Bool("payment.created", false))
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Error("Payment: Failed to create payment with transaction", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
+		log.Error("Payment: Failed to create payment with transaction",
+			lOrderID,
+			lAmount,
+			lPaymentMethod,
+			zap.Error(err),
+		)
 		return nil, err
 	}
 
+	span.SetAttributes(attribute.Bool("payment.created", true))
 	log.Info(
 		"Payment: Payment created with transaction",
 		lOrderID,
@@ -119,7 +130,10 @@ func (s *Service) GetPaymentByOrderID(ctx context.Context, orderID string) (*Pay
 	return s.repo.GetByOrderID(ctx, orderID)
 }
 
-func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID string, amount int64, paymentMethod string) (*CreatePaymentResponse, error) {
+func (s *Service) createPayment(ctx context.Context, repo *Repository,
+	orderID string, amount int64, paymentMethod string) (*CreatePaymentResponse, error) {
+
+	// logger
 	log := helper.LoggerFromCtx(ctx)
 	lOrderID := zap.String("order_id", orderID)
 	lAmount := zap.Int64("amount", amount)
@@ -127,11 +141,27 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 
 	log.Info("Payment: Creating payment", lOrderID, lAmount, lPaymentMethod)
 
+	// tracer
+	tr := otel.Tracer("payment.service")
+	ctx, span := tr.Start(ctx, "payment.service.createPayment")
+	defer span.End()
+	span.SetAttributes(
+		attribute.String("order_id", orderID),
+		attribute.Int64("amount", amount),
+		attribute.String("payment_method", paymentMethod),
+	)
+
 	if amount <= 0 {
+		span.SetAttributes(attribute.Bool("payment.created", false))
+		span.RecordError(ErrInvalidAmount)
+		span.SetStatus(codes.Error, ErrInvalidAmount.Error())
 		log.Warn("Payment: Invalid payment amount", lOrderID, lAmount, lPaymentMethod, zap.Error(ErrInvalidAmount))
 		return nil, ErrInvalidAmount
 	}
 	if strings.TrimSpace(paymentMethod) == "" {
+		span.SetAttributes(attribute.Bool("payment.created", false))
+		span.RecordError(ErrInvalidPaymentMethod)
+		span.SetStatus(codes.Error, ErrInvalidPaymentMethod.Error())
 		log.Warn("Payment: Payment method is required", lOrderID, lAmount, lPaymentMethod, zap.Error(ErrInvalidPaymentMethod))
 		return nil, ErrInvalidPaymentMethod
 	}
@@ -139,6 +169,9 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	paymentID := uuid.New()
 	orderUUID, err := uuid.Parse(orderID)
 	if err != nil {
+		span.SetAttributes(attribute.Bool("payment.created", false))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to parse order ID", lOrderID, lAmount, lPaymentMethod, zap.Error(err))
 		return nil, err
 	}
@@ -155,6 +188,9 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 	}
 
 	if err := repo.CreatePayment(ctx, p); err != nil {
+		span.SetAttributes(attribute.Bool("payment.created", false))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error(
 			"Payment: Failed to create payment",
 			lOrderID,
@@ -168,6 +204,7 @@ func (s *Service) createPayment(ctx context.Context, repo *Repository, orderID s
 
 	paymentURL := paymentURL + paymentID.String()
 
+	span.SetAttributes(attribute.Bool("payment.created", true))
 	log.Info(
 		"Payment: Payment created",
 		lOrderID,
