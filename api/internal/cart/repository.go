@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 )
@@ -32,11 +33,23 @@ func CreateNewCartRepository(db *redis.Client) *CartRepository {
 
 func (c *CartRepository) Get(ctx context.Context, ownerID uuid.UUID) (*Cart, error) {
 	key := "cart:" + ownerID.String()
-	storedItems, err := c.db.Get(ctx, key).Result()
-	if err != nil {
+
+	var storedItems string
+	var cartNotFound bool
+	err := helper.Retry(3, 100*time.Millisecond, func() error {
+		var err error
+		storedItems, err = c.db.Get(ctx, key).Result()
 		if errors.Is(err, redis.Nil) {
-			return nil, ErrCartNotFound
+			cartNotFound = true
+			return nil
 		}
+		return err
+	})
+
+	if cartNotFound {
+		return nil, ErrCartNotFound
+	}
+	if err != nil {
 		return nil, err
 	}
 

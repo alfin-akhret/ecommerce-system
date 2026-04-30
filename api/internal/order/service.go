@@ -252,11 +252,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrde
 	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 
+	// logger
 	log := helper.LoggerFromCtx(ctx)
 	lUserID := zap.String("user_id", userID)
 
 	log.Info("Order: Creating order", lUserID)
 
+	// tracer
 	tr := otel.Tracer("order-service")
 	ctx, span := tr.Start(ctx, "CreateOrder")
 	defer span.End()

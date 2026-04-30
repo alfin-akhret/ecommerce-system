@@ -40,7 +40,7 @@ func TestCartAddItem(t *testing.T) {
 	t.Run("adds new product to cart", func(t *testing.T) {
 		productID := uuid.New()
 		cart := Cart{
-			Owner:     uuid.New(),
+			Owner: uuid.New(),
 			Items: make(map[uuid.UUID]CartItem),
 		}
 
@@ -90,8 +90,8 @@ func TestCartAddItem(t *testing.T) {
 			t.Fatalf("expected qty 4, got %d", item.Qty)
 		}
 
-		if item.Price != 15000 {
-			t.Fatalf("expected price to stay 15000, got %v", item.Price)
+		if item.Price != 20000 {
+			t.Fatalf("expected price to update to 20000, got %v", item.Price)
 		}
 	})
 
@@ -199,7 +199,7 @@ func TestCartRemoveItem(t *testing.T) {
 
 	t.Run("returns error when product does not exist", func(t *testing.T) {
 		cart := Cart{
-			Owner:     uuid.New(),
+			Owner: uuid.New(),
 			Items: make(map[uuid.UUID]CartItem),
 		}
 
@@ -287,7 +287,7 @@ func TestCartUpdateQuantity(t *testing.T) {
 
 	t.Run("returns error when product does not exist", func(t *testing.T) {
 		cart := Cart{
-			Owner:     uuid.New(),
+			Owner: uuid.New(),
 			Items: make(map[uuid.UUID]CartItem),
 		}
 

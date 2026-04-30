@@ -3,12 +3,15 @@ package cart
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,8 +20,53 @@ import (
 )
 
 func TestCartGet(t *testing.T) {
+	t.Run("returns cart not found without retrying", func(t *testing.T) {
+		db := newTestRedisClient(t)
+		attempts := addGetCountingHook(db, nil)
+		repo := CreateNewCartRepository(db)
+
+		result, err := repo.Get(context.Background(), uuid.New())
+		if !errors.Is(err, ErrCartNotFound) {
+			t.Fatalf("expected error %v, got %v", ErrCartNotFound, err)
+		}
+
+		if result != nil {
+			t.Fatalf("expected no cart, got %+v", result)
+		}
+
+		if got := attempts.Load(); got != 1 {
+			t.Fatalf("expected redis get to run once, got %d attempts", got)
+		}
+	})
+
+	t.Run("retries redis errors other than cart not found", func(t *testing.T) {
+		expectedErr := errors.New("redis temporarily unavailable")
+		db := redis.NewClient(&redis.Options{Addr: "127.0.0.1:0"})
+		t.Cleanup(func() {
+			if err := db.Close(); err != nil {
+				t.Fatalf("failed to close redis client: %v", err)
+			}
+		})
+		attempts := addGetCountingHook(db, expectedErr)
+		repo := CreateNewCartRepository(db)
+
+		result, err := repo.Get(context.Background(), uuid.New())
+		if !errors.Is(err, expectedErr) {
+			t.Fatalf("expected error %v, got %v", expectedErr, err)
+		}
+
+		if result != nil {
+			t.Fatalf("expected no cart, got %+v", result)
+		}
+
+		if got := attempts.Load(); got != 3 {
+			t.Fatalf("expected redis get to retry 3 times, got %d attempts", got)
+		}
+	})
+
 	t.Run("returns cart stored in redis json keyed by owner", func(t *testing.T) {
 		db := newTestRedisClient(t)
+		attempts := addGetCountingHook(db, nil)
 		repo := CreateNewCartRepository(db)
 
 		ownerID := uuid.New()
@@ -58,6 +106,9 @@ func TestCartGet(t *testing.T) {
 			t.Fatalf("expected stored item %+v, got %+v", expectedID, resultID)
 		}
 
+		if got := attempts.Load(); got != 1 {
+			t.Fatalf("expected redis get to run once, got %d attempts", got)
+		}
 	})
 
 }
@@ -325,4 +376,39 @@ func reserveRedisPort(t *testing.T) int {
 	}
 
 	return addr.Port
+}
+
+func addGetCountingHook(db *redis.Client, errToReturn error) *atomic.Int32 {
+	attempts := &atomic.Int32{}
+	db.AddHook(getHook{
+		attempts:    attempts,
+		errToReturn: errToReturn,
+	})
+	return attempts
+}
+
+type getHook struct {
+	attempts    *atomic.Int32
+	errToReturn error
+}
+
+func (h getHook) DialHook(next redis.DialHook) redis.DialHook {
+	return next
+}
+
+func (h getHook) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return func(ctx context.Context, cmd redis.Cmder) error {
+		if strings.EqualFold(cmd.Name(), "get") {
+			h.attempts.Add(1)
+			if h.errToReturn != nil {
+				return h.errToReturn
+			}
+		}
+
+		return next(ctx, cmd)
+	}
+}
+
+func (h getHook) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return next
 }
