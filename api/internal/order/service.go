@@ -258,8 +258,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 	log.Info("Order: Creating order", zap.String("user_id", userID))
 
 	// tracer
-	tr := otel.Tracer("order-service")
-	ctx, span := tr.Start(ctx, "order-service.CreateOrder")
+	tr := otel.Tracer("order.service")
+	ctx, span := tr.Start(ctx, "order.service.CreateOrder")
 	defer span.End()
 
 	// 1. get cart

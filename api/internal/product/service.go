@@ -140,13 +140,13 @@ func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 
 	log.Info("Product: Reserving stock", lProductID, lQty)
 
-	tr := otel.Tracer("product-service")
-	ctx, span := tr.Start(ctx, "ReserveStockWithTx")
+	tr := otel.Tracer("product.service")
+	ctx, span := tr.Start(ctx, "product.service.ReserveStockWithTx")
 	defer span.End()
 
 	span.SetAttributes(
-		attribute.String("product_id", productID),
-		attribute.Int("qty", qty),
+		attribute.String("product.id", productID),
+		attribute.Int("product.qty", qty),
 	)
 
 	repo := s.repo.WithTx(tx)
@@ -161,6 +161,9 @@ func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	available := inv.Stock - inv.Reserved
 
 	if available < qty {
+		span.SetAttributes(attribute.Bool("reserved", false))
+		span.RecordError(err)
+		span.SetStatus(codes.Error, ErrNotEnoughStock.Error())
 		log.Warn(
 			"Product: Not enough stock to reserve",
 			lProductID,
@@ -172,12 +175,18 @@ func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	}
 
 	if err := repo.UpdateReserved(ctx, productID, qty); err != nil {
+		span.SetAttributes(attribute.Bool("reserved", false))
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
-		log.Error("Product: Failed to update reserved stock", lProductID, lQty, zap.Error(err))
+		log.Error("Product: Failed to update reserved stock",
+			lProductID,
+			lQty,
+			zap.Error(err),
+		)
 		return err
 	}
 
+	span.SetAttributes(attribute.Bool("reserved", true))
 	log.Info(
 		"Product: Stock reserved",
 		lProductID,

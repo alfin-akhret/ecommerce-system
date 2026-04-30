@@ -37,10 +37,10 @@ func CreateNewCartRepository(db *redis.Client) *CartRepository {
 
 func (c *CartRepository) Get(ctx context.Context, ownerID uuid.UUID) (*Cart, error) {
 	logger := helper.LoggerFromCtx(ctx)
-	tr := otel.Tracer("cart-repository")
+	tr := otel.Tracer("cart.repository")
 
 	key := "cart:" + ownerID.String()
-	ctx, span := tr.Start(ctx, "CartRepository.Get")
+	ctx, span := tr.Start(ctx, "cart.repository.Get")
 	defer span.End()
 	span.SetAttributes(
 		attribute.String("db.system", "redis"),
