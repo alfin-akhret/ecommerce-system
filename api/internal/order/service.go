@@ -119,8 +119,8 @@ func (s *Service) UpdateStatus(ctx context.Context, orderID string, status strin
 
 func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
 
-	tr := otel.Tracer("order-service")
-	ctx, span := tr.Start(ctx, "ConfirmOrderStockWithTx")
+	tr := otel.Tracer("order.service")
+	ctx, span := tr.Start(ctx, "order.service.ConfirmOrderStockWithTx")
 	defer span.End()
 
 	items, err := s.repo.ListOrderItems(ctx, orderID)
@@ -141,8 +141,8 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 
 func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
 
-	tr := otel.Tracer("order-service")
-	ctx, span := tr.Start(ctx, "ReleaseOrderStockWithTx")
+	tr := otel.Tracer("order.service")
+	ctx, span := tr.Start(ctx, "order.service.ReleaseOrderStockWithTx")
 	defer span.End()
 
 	repo := s.repo.WithTx(tx)
@@ -199,8 +199,8 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 	log := helper.LoggerFromCtx(ctx)
 
-	tr := otel.Tracer("order-service")
-	ctx, span := tr.Start(ctx, "getCart")
+	tr := otel.Tracer("order.service")
+	ctx, span := tr.Start(ctx, "order.service.getCart")
 	defer span.End()
 
 	ownerID, err := uuid.Parse(userID)
@@ -246,7 +246,7 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 
 }
 
-func (s *Service) CreateOrder(ctx context.Context, userID string, 
+func (s *Service) CreateOrder(ctx context.Context, userID string,
 	req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
 	// set timeout
 	// ini untuk menjaga external call seperti ke: db, redis,
@@ -268,17 +268,17 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to get cart",
-			zap.String("user_id", userID), 
-			zap.String("error_message", err.Error())
+			zap.String("user_id", userID),
+			zap.String("error_message", err.Error()),
 		)
 		return nil, err
 	}
 
 	if cart.Items == nil || cart.TotalAmount == 0 {
 		log.Warn("Order: Cart is empty or total amount is zero",
-			zap.String("user_id", userID), 
+			zap.String("user_id", userID),
 			zap.String("error_message",
-			ErrCartItem.Error())
+				ErrCartItem.Error()),
 		)
 		return nil, ErrCartItem
 	}
@@ -289,7 +289,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		log.Error("Order: Failed to start DB transaction",
 			zap.String("user_id", userID),
 			zap.String("error_message",
-			err.Error())
+				err.Error()),
 		)
 		return nil, err
 	}
@@ -302,8 +302,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 	if err != nil {
 		log.Error("Order: Failed to parse user ID",
 			zap.String("user_id", userID),
-			zap.String("error_message", 
-			err.Error())
+			zap.String("error_message",
+				err.Error()),
 		)
 		return nil, err
 	}
@@ -353,8 +353,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to create order",
-			zap.String("user_id", userID), 
-			zap.Stack(err.Error())
+			zap.String("user_id", userID),
+			zap.Stack(err.Error()),
 		)
 		return nil, err
 	}
@@ -364,8 +364,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
 			log.Error("Order: Failed to create order item",
-				zap.String("user_id", userID), 
-				zap.Stack(err.Error())
+				zap.String("user_id", userID),
+				zap.Stack(err.Error()),
 			)
 			return nil, err
 		}
@@ -377,8 +377,8 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to create payment",
-			zap.String("user_id", userID), 
-			zap.Stack(err.Error())
+			zap.String("user_id", userID),
+			zap.Stack(err.Error()),
 		)
 		return nil, err
 	}
@@ -449,12 +449,12 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		attribute.String("user.id", userID),
 	)
 
-	log.Info("Order: Order created", lUserID, zap.String("order_id", orderID.String()))
+	log.Info("Order: Order created", zap.String("user_id", userID), zap.String("order_id", orderID.String()))
 
 	// remove cart
 	if _, err := s.cart.DeleteCart(ctx, uid); err != nil {
 		log.Error("Order: Failed to delete cart after creating order",
-			zap.String("user_id", userID), 
+			zap.String("user_id", userID),
 			zap.String("order_id", orderID.String()),
 			zap.String("error_message", err.Error()),
 		)
