@@ -247,6 +247,11 @@ func (s *Service) getCart(ctx context.Context, userID string) (*Cart, error) {
 }
 
 func (s *Service) CreateOrder(ctx context.Context, userID string, req CreateOrderRequest, key string) (*CreateOrderResponse, error) {
+	// set timeout
+	// ini untuk menjaga external call seperti ke: db, redis,
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
 	log := helper.LoggerFromCtx(ctx)
 	lUserID := zap.String("user_id", userID)
 
