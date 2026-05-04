@@ -136,6 +136,9 @@ func main() {
 	application.PaymentExpirationWorker.Start(ctx)
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
 
+	// queue worker, see internal/queue
+	go application.Queue.StartWorker(context.Background())
+
 	// handle shutdown
 
 	// === 7. Run HTTP server
