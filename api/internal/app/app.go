@@ -65,7 +65,7 @@ func New() (*App, error) {
 		Handlers: make(map[string]queue.Handler),
 	}
 
-	// register send email job to the queue
+	// register send_email job to the queue
 	registry.Register("send_email", jobs.SendEmailHandler)
 
 	// queue

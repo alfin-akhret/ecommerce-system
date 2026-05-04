@@ -35,7 +35,7 @@ func (q *Queue) process(job Job) {
 
 	logger.Info("Processing job", zap.String("job", job.Type))
 
-	err := handler(context.Background(), job.Payload)
+	err := handler(ctx, job.Payload)
 	if err != nil {
 		if job.Retry < 3 {
 			job.Retry++
