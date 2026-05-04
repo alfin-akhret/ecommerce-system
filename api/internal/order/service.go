@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
+	"github.com/alfin-akhret/ecommerce-system/internal/jobs"
+	"github.com/alfin-akhret/ecommerce-system/internal/queue"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -28,12 +30,14 @@ type Service struct {
 	product contracts.ProductManager
 	payment contracts.PaymentManager
 	cart    contracts.CartManager
+	queue   *queue.Queue
 }
 
 func NewService(db *pgxpool.Pool,
 	product contracts.ProductManager,
 	payment contracts.PaymentManager,
-	cart contracts.CartManager) *Service {
+	cart contracts.CartManager,
+	queue *queue.Queue) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -43,6 +47,7 @@ func NewService(db *pgxpool.Pool,
 		product: product,
 		payment: payment,
 		cart:    cart,
+		queue:   queue,
 	}
 }
 
@@ -492,6 +497,17 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		)
 		return nil, err
 	}
+
+	// create send email job
+	payload, _ := json.Marshal(jobs.SendEmailPayload{
+		OrderID: orderID.String(),
+		Email:   "testingemail@gmail.com",
+	})
+
+	s.queue.Enqueue(queue.Job{
+		Type:    "send_email",
+		Payload: payload,
+	})
 
 	return orderRespnse, nil
 

@@ -8,10 +8,12 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
+	"github.com/alfin-akhret/ecommerce-system/internal/jobs"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
 	"github.com/alfin-akhret/ecommerce-system/internal/product"
+	"github.com/alfin-akhret/ecommerce-system/internal/queue"
 	"github.com/alfin-akhret/ecommerce-system/internal/user"
 )
 
@@ -26,6 +28,7 @@ type App struct {
 	CartHandler                  *cart.Handler
 	PaymentExpirationWorker      *payment.PaymentExpirationWorker
 	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
+	Queue                        *queue.Queue
 }
 
 func New() (*App, error) {
@@ -56,8 +59,23 @@ func New() (*App, error) {
 	// payment
 	paymentService := payment.NewService(db)
 
+	// queue
+	// 9. queue and worker
+	registry := &queue.Registry{
+		Handlers: make(map[string]queue.Handler),
+	}
+
+	// register send email job to the queue
+	registry.Register("send_email", jobs.SendEmailHandler)
+
+	// queue
+	queue := &queue.Queue{
+		Jobs:     make(chan queue.Job, 100),
+		Registry: registry,
+	}
+
 	// order
-	orderService := order.NewService(db, productService, paymentService, cartService)
+	orderService := order.NewService(db, productService, paymentService, cartService, queue)
 	orderHandler := order.NewHandler(orderService)
 
 	paymentService.SetOrderStatusUpdater(orderService)
@@ -101,5 +119,6 @@ func New() (*App, error) {
 		CartHandler:                  cartHandler,
 		PaymentExpirationWorker:      expirationWorker,
 		IdempotencyKeyDeletionWorker: iKeyDeletWorker,
+		Queue:                        queue,
 	}, nil
 }

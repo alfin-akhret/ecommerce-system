@@ -13,8 +13,6 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/internal/app"
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
-	"github.com/alfin-akhret/ecommerce-system/internal/jobs"
-	"github.com/alfin-akhret/ecommerce-system/internal/queue"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
@@ -138,6 +136,9 @@ func main() {
 	application.PaymentExpirationWorker.Start(ctx)
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
 
+	// queue worker, see internal/queue
+	go application.Queue.StartWorker(context.Background())
+
 	// handle shutdown
 
 	// === 7. Run HTTP server
@@ -176,21 +177,6 @@ func main() {
 		log.Printf("tracer shutdown error: %v", err)
 	}
 
-	// 9. queue and worker
-	registry := &queue.Registry{
-		Handlers: make(map[string]queue.Handler),
-	}
-
-	// register send email job to the queue
-	registry.Register("send_email", jobs.SendEmailHandler)
-
-	// queue
-	queue := &queue.Queue{
-		Jobs:     make(chan queue.Job, 100),
-		Registry: registry,
-	}
-
-	go queue.StartWorker(context.Background())
 }
 
 func PanicHandler(w http.ResponseWriter, r *http.Request) {

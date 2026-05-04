@@ -2,8 +2,11 @@ package queue
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
+
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"go.uber.org/zap"
 )
 
 // worker loop
@@ -20,11 +23,17 @@ func (q *Queue) StartWorker(ctx context.Context) {
 
 // process job + retry
 func (q *Queue) process(job Job) {
+	ctx := context.Background()
+	logger := helper.LoggerFromCtx(ctx)
+
 	handler, ok := q.Registry.Get(job.Type)
 	if !ok {
-		fmt.Println("unknown job:", job.Type)
+		err := errors.New("unknown job")
+		logger.Info("Processing job", zap.String("error_message", err.Error()))
 		return
 	}
+
+	logger.Info("Processing job", zap.String("job", job.Type))
 
 	err := handler(context.Background(), job.Payload)
 	if err != nil {
