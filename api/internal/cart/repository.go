@@ -40,6 +40,7 @@ func (c *CartRepository) Get(ctx context.Context, ownerID uuid.UUID) (*Cart, err
 	tr := otel.Tracer("cart.repository")
 
 	key := "cart:" + ownerID.String()
+
 	ctx, span := tr.Start(ctx, "cart.repository.Get")
 	defer span.End()
 	span.SetAttributes(

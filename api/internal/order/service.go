@@ -100,10 +100,16 @@ func (s *Service) GetOrder(ctx context.Context, userID string, orderID string) (
 }
 
 func (s *Service) UpdateOrderStatusWithTx(ctx context.Context, tx pgx.Tx, orderID string, status string) error {
+	tr := otel.Tracer("order.service")
+	ctx, span := tr.Start(ctx, "order.service.UpdateOrderStatusWithTx")
+	defer span.End()
+
 	repo := s.repo.WithTx(tx)
 
 	err := repo.UpdateOrderStatus(ctx, orderID, status)
 	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		return err
 	}
 
@@ -170,27 +176,53 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 
 // subscribe to topic: "payment.expired"
 func (s *Service) CancelOrder(ctx context.Context, orderID string) {
+	logger := helper.LoggerFromCtx(ctx)
+
+	tr := otel.Tracer("order.service")
+	ctx, span := tr.Start(ctx, "order.service.CancelOrder")
+	defer span.End()
+
 	log.Println("[Order] cancel order:", orderID)
 
 	tx, err := s.db.Begin(ctx)
 	if err != nil {
-		log.Printf("[Order Service] cancel order error: %v\n", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		logger.Error("[Order Service] cancel order: begin transaction",
+			zap.String("error_message", err.Error()),
+			zap.String("order_id", orderID),
+		)
 		return
 	}
 	defer tx.Rollback(ctx)
 
 	if err := s.UpdateOrderStatusWithTx(ctx, tx, orderID, "CANCELLED"); err != nil {
-		log.Printf("[Order Service] cancel order error: %v\n", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		logger.Error("[Order Service] update order status",
+			zap.String("error_message", err.Error()),
+			zap.String("order_id", orderID),
+		)
 		return
 	}
 
 	if err := s.ReleaseOrderStockWithTx(ctx, tx, orderID); err != nil {
-		log.Printf("[Order Service] cancel order error: %v\n", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		logger.Error("[Order Service] release order stock",
+			zap.String("error_message", err.Error()),
+			zap.String("order_id", orderID),
+		)
 		return
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		log.Printf("[Order Service] cancel order commit error: %v\n", err)
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		logger.Error("[Order Service] cancler order: commit transaction",
+			zap.String("error_message", err.Error()),
+			zap.String("order_id", orderID),
+		)
 		return
 	}
 
