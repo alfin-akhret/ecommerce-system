@@ -507,6 +507,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 	s.queue.Enqueue(queue.Job{
 		Type:    "send_email",
 		Payload: payload,
+		Timeout: 5 * time.Second,
 	})
 
 	return orderRespnse, nil

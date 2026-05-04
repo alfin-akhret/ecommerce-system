@@ -5,6 +5,7 @@ package queue
 type Queue struct {
 	Jobs     chan Job
 	Registry *Registry
+	Dlq      chan Job
 }
 
 // push job to queue

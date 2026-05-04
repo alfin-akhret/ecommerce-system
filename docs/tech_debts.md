@@ -101,3 +101,16 @@ banyak juga log.Println, log.Printf, fmt.Println di file lain, ini output plain 
 15. containerize fake-payment-api
 16. instrument fake-payment-api
 
+
+Worker checklist:
+* ✅ worker pool
+* ✅ graceful shutdown (ctx)
+* ✅ panic recovery + restart
+* ✅ retry with exponential backoff
+* ✅ non-blocking retry
+* ✅ context-aware retry
+* ✅ DLQ non-blocking
+* ✅ logging structured
+* ✅ safe logger fallback
+* ✅ channel close handling (Jobs)
+
