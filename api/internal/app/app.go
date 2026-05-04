@@ -72,6 +72,7 @@ func New() (*App, error) {
 	queue := &queue.Queue{
 		Jobs:     make(chan queue.Job, 100),
 		Registry: registry,
+		Dlq:      make(chan queue.Job, 100),
 	}
 
 	// order

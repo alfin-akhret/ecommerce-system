@@ -12,67 +12,127 @@ import (
 
 // worker Pool
 func (q *Queue) StartWorkers(ctx context.Context, n int) {
+	// main worker
 	for i := 0; i < n; i++ {
 		go q.worker(ctx, i)
 	}
 
 	// DLQ worker
 	go func() {
-		for job := range q.Dlq {
-			fmt.Println("DLQ:", job.Type)
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case job, ok := <-q.Dlq:
+				if !ok {
+					return
+				}
+				fmt.Println("DLQ:", job.Type)
+			}
 		}
 	}()
 }
 
 // worker loop
 func (q *Queue) worker(ctx context.Context, id int) {
+	// recover jika worker panic
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Println("worker panic recovered:", id, r)
+			time.Sleep(1 * time.Second)
+			go q.worker(ctx, id) // restart worker
+		}
+	}()
+
+	// proses job
 	for {
 		select {
 		case <-ctx.Done():
 			fmt.Println("worker stopped:", id)
 			return
-		case job := <-q.Jobs:
-			q.process(job)
+		case job, ok := <-q.Jobs:
+			if !ok {
+				return
+			}
+			q.process(ctx, job)
 		}
 	}
 }
 
 // process job + retry
-func (q *Queue) process(job Job) {
-	ctx := context.Background()
+func (q *Queue) process(ctx context.Context, job Job) {
+
 	logger := helper.LoggerFromCtx(ctx)
+	if logger == nil {
+		logger = zap.NewNop()
+	}
 
 	handler, ok := q.Registry.Get(job.Type)
 	if !ok {
 		err := errors.New("unknown job")
-		logger.Info("Processing job", zap.String("error_message", err.Error()))
-		q.Dlq <- job
+		logger.Error("Unknown job type",
+			zap.String("job", job.Type),
+			zap.String("error_message", err.Error()))
+
+		select {
+		case q.Dlq <- job:
+		default:
+			logger.Error("DLQ full, dropping job", zap.String("job", job.Type))
+		}
+
 		return
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	// determine timeout per job (fallback to default 2s)
+	timeout := 2 * time.Second
+	if job.Timeout > 0 {
+		timeout = job.Timeout
+	}
+
+	jobCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	logger.Info("Processing job", zap.String("job", job.Type))
+	logger.Info("Start job", zap.String("job", job.Type))
 
-	err := handler(ctx, job.Payload)
+	err := handler(jobCtx, job.Payload)
 	if err != nil {
 		if job.Retry < 3 {
 			job.Retry++
 
+			logger.Info("Retry job",
+				zap.String("job", job.Type),
+				zap.Int("retry", job.Retry),
+			)
+
 			// non-blocking retry using goroutine
+			// context aware retry
 			go func(j Job) {
-				time.Sleep(backoff(job.Retry))
-				q.Enqueue(job)
+				select {
+				case <-time.After(backoff(j.Retry)):
+					q.Enqueue(j)
+				case <-ctx.Done():
+					return
+				}
 			}(job)
 
 			return
 		}
-		q.Dlq <- job
+
+		logger.Warn("Failed job", zap.String("job", job.Type))
+
+		select {
+		case q.Dlq <- job:
+		default:
+			logger.Error("DLQ full, dropping job", zap.String("job", job.Type))
+		}
+
+		return
 	}
+
+	logger.Info("Success job", zap.String("job", job.Type))
 }
 
 // exponential backoff
 func backoff(attempt int) time.Duration {
-	return time.Duration(1<<attempt) * 100 * time.Millisecond
+	return time.Duration(1<<attempt) * 500 * time.Millisecond
 }
