@@ -3,6 +3,7 @@ package product
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -134,6 +135,9 @@ func (s *Service) ReserveStock(ctx context.Context, productID string, qty int) e
 }
 
 func (s *Service) ReserveStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
 	log := helper.LoggerFromCtx(ctx)
 	lProductID := zap.String("product_id", productID)
 	lQty := zap.Int("qty", qty)

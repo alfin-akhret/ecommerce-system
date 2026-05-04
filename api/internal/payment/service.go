@@ -59,6 +59,9 @@ func (s *Service) CreatePayment(ctx context.Context, orderID string, amount int6
 
 func (s *Service) CreatePaymentWithTx(ctx context.Context, tx pgx.Tx,
 	orderID string, amount int64, paymentMethod string) (*contracts.PaymentCreateResult, error) {
+	// timeout
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
 
 	// logger
 	log := helper.LoggerFromCtx(ctx)
