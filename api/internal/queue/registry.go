@@ -3,14 +3,14 @@ package queue
 // Mapping job -> handler
 
 type Registry struct {
-	handlers map[string]Handler
+	Handlers map[string]Handler
 }
 
 func (r *Registry) Register(name string, h Handler) {
-	r.handlers[name] = h
+	r.Handlers[name] = h
 }
 
 func (r *Registry) Get(name string) (Handler, bool) {
-	h, ok := r.handlers[name]
+	h, ok := r.Handlers[name]
 	return h, ok
 }

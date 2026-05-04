@@ -12,7 +12,7 @@ func (q *Queue) StartWorker(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case job := <-q.jobs:
+		case job := <-q.Jobs:
 			q.process(job)
 		}
 	}
@@ -20,7 +20,7 @@ func (q *Queue) StartWorker(ctx context.Context) {
 
 // process job + retry
 func (q *Queue) process(job Job) {
-	handler, ok := q.registry.Get(job.Type)
+	handler, ok := q.Registry.Get(job.Type)
 	if !ok {
 		fmt.Println("unknown job:", job.Type)
 		return
