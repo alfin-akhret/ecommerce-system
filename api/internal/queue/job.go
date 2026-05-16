@@ -3,6 +3,7 @@ package queue
 import "time"
 
 type Job struct {
+	ID        string
 	Type      string
 	Payload   []byte
 	Retry     int

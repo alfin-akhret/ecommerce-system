@@ -504,10 +504,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		Email:   "testingemail@gmail.com",
 	})
 
-	s.queue.Enqueue(queue.Job{
-		Type:    "send_email",
-		Payload: payload,
-		Timeout: 5 * time.Second,
+	s.queue.Enqueue(ctx, queue.Job{
+		Type:      "send_email",
+		Payload:   payload,
+		Timeout:   5 * time.Second,
+		Retry:     0,
+		MaxRetry:  3,
+		CreatedAt: time.Now(),
 	})
 
 	return orderRespnse, nil
