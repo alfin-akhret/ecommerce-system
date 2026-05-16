@@ -75,6 +75,8 @@ return moved
 `)
 )
 
+// Enqueue memasukkan job baru ke queue Redis dengan dedup berbasis job ID.
+// Kalau job ID yang sama masih ada dalam TTL dedup, job tidak akan di-push lagi.
 func (q *RedisQueue) Enqueue(ctx context.Context, job Job) error {
 	job = normalizeJob(job)
 
@@ -90,19 +92,22 @@ func (q *RedisQueue) Enqueue(ctx context.Context, job Job) error {
 	).Err()
 }
 
+// StartAll menjalankan worker utama, scheduler delayed job, dan recovery worker.
 func (q *RedisQueue) StartAll(ctx context.Context, n int) {
 	q.StartWorkers(ctx, n)
 	go q.StartScheduler(ctx)
 	go q.StartRecoveryWorker(ctx)
 }
 
+// StartWorkers menjalankan sejumlah worker paralel untuk mengambil dan memproses job.
 func (q *RedisQueue) StartWorkers(ctx context.Context, n int) {
 	for i := 0; i < n; i++ {
 		go q.worker(ctx, i)
 	}
 }
 
-// worker (blocking)
+// worker mengambil job secara blocking dari queue utama ke queue processing,
+// lalu memprosesnya dengan lease/heartbeat agar recovery tidak memproses job yang sama.
 func (q *RedisQueue) worker(ctx context.Context, id int) {
 	for {
 		select {
@@ -145,6 +150,7 @@ func (q *RedisQueue) worker(ctx context.Context, id int) {
 	}
 }
 
+// StartRecoveryWorker menjalankan loop periodik untuk mengembalikan job yang stale.
 func (q *RedisQueue) StartRecoveryWorker(ctx context.Context) {
 	ticker := time.NewTicker(recoveryInterval)
 	defer ticker.Stop()
@@ -159,6 +165,7 @@ func (q *RedisQueue) StartRecoveryWorker(ctx context.Context) {
 	}
 }
 
+// recoverStaleJobs mencari job processing yang lease-nya habis dan mengembalikannya ke queue.
 func (q *RedisQueue) recoverStaleJobs(ctx context.Context) {
 	q.ensureProcessingDeadlines(ctx)
 
@@ -177,7 +184,7 @@ func (q *RedisQueue) recoverStaleJobs(ctx context.Context) {
 	}
 }
 
-// retry with delay
+// scheduleRetry menaruh job gagal ke sorted set delayed dengan waktu retry berdasarkan backoff.
 func (q *RedisQueue) scheduleRetry(ctx context.Context, job Job) {
 	job = normalizeJob(job)
 	data, _ := json.Marshal(job)
@@ -190,7 +197,7 @@ func (q *RedisQueue) scheduleRetry(ctx context.Context, job Job) {
 	})
 }
 
-// shceduler
+// StartScheduler memindahkan delayed job yang sudah due kembali ke queue utama secara atomik.
 func (q *RedisQueue) StartScheduler(ctx context.Context) {
 	ticker := time.NewTicker(schedulerInterval)
 	defer ticker.Stop()
@@ -210,14 +217,14 @@ func (q *RedisQueue) StartScheduler(ctx context.Context) {
 	}
 }
 
-// DLQ
+// pushDLQ menyimpan job yang gagal permanen atau tidak valid ke dead-letter queue.
 func (q *RedisQueue) pushDLQ(ctx context.Context, job Job) {
 	job = normalizeJob(job)
 	data, _ := json.Marshal(job)
 	q.Client.LPush(ctx, queueDLQKey, data)
 }
 
-// main process
+// process menjalankan handler job, mengatur timeout, retry, dan DLQ saat gagal.
 func (q *RedisQueue) process(ctx context.Context, job Job) error {
 	job = normalizeJob(job)
 
@@ -276,6 +283,7 @@ func (q *RedisQueue) process(ctx context.Context, job Job) error {
 	return nil
 }
 
+// normalizeJob mengisi default field penting seperti ID, CreatedAt, Timeout, dan MaxRetry.
 func normalizeJob(job Job) Job {
 	if job.ID == "" {
 		job.ID = jobFingerprint(job)
@@ -292,11 +300,13 @@ func normalizeJob(job Job) Job {
 	return job
 }
 
+// jobFingerprint membuat ID deterministik dari tipe job dan payload untuk dedup otomatis.
 func jobFingerprint(job Job) string {
 	sum := sha256.Sum256(append([]byte(job.Type), job.Payload...))
 	return hex.EncodeToString(sum[:])
 }
 
+// processingLease menentukan durasi lease job selama berada di queue processing.
 func processingLease(job Job) time.Duration {
 	lease := job.Timeout * 3
 	if lease < minProcessingLease {
@@ -305,6 +315,7 @@ func processingLease(job Job) time.Duration {
 	return lease
 }
 
+// heartbeatInterval menentukan seberapa sering worker memperpanjang lease job.
 func heartbeatInterval(job Job) time.Duration {
 	interval := processingLease(job) / 3
 	if interval < heartbeatMinInterval {
@@ -313,10 +324,12 @@ func heartbeatInterval(job Job) time.Duration {
 	return interval
 }
 
+// processingDeadline menghitung timestamp Unix kapan lease processing job dianggap expired.
 func (q *RedisQueue) processingDeadline(job Job) float64 {
 	return float64(time.Now().Add(processingLease(job)).Unix())
 }
 
+// trackProcessing mencatat atau memperpanjang deadline processing job di Redis sorted set.
 func (q *RedisQueue) trackProcessing(ctx context.Context, raw string, job Job) {
 	q.Client.ZAdd(ctx, queueProcessingDeadlinesKey, redis.Z{
 		Score:  q.processingDeadline(job),
@@ -324,6 +337,7 @@ func (q *RedisQueue) trackProcessing(ctx context.Context, raw string, job Job) {
 	})
 }
 
+// startHeartbeat menjalankan goroutine yang memperpanjang lease selama job masih diproses.
 func (q *RedisQueue) startHeartbeat(ctx context.Context, raw string, job Job) func() {
 	heartbeatCtx, cancel := context.WithCancel(ctx)
 	done := make(chan struct{})
@@ -350,6 +364,7 @@ func (q *RedisQueue) startHeartbeat(ctx context.Context, raw string, job Job) fu
 	}
 }
 
+// ackProcessing menghapus job dari queue processing dan index deadline setelah selesai ditangani.
 func (q *RedisQueue) ackProcessing(ctx context.Context, raw string) {
 	ackProcessingScript.Run(ctx, q.Client,
 		[]string{queueProcessingKey, queueProcessingDeadlinesKey},
@@ -357,6 +372,7 @@ func (q *RedisQueue) ackProcessing(ctx context.Context, raw string) {
 	)
 }
 
+// requeueProcessing memindahkan job stale dari processing kembali ke queue utama secara atomik.
 func (q *RedisQueue) requeueProcessing(ctx context.Context, raw string) {
 	requeueProcessingScript.Run(ctx, q.Client,
 		[]string{queueProcessingKey, queueProcessingDeadlinesKey, queueJobsKey},
@@ -364,6 +380,7 @@ func (q *RedisQueue) requeueProcessing(ctx context.Context, raw string) {
 	)
 }
 
+// ensureProcessingDeadlines membuat ulang deadline untuk job processing lama yang belum terindex.
 func (q *RedisQueue) ensureProcessingDeadlines(ctx context.Context) {
 	jobs, err := q.Client.LRange(ctx, queueProcessingKey, 0, -1).Result()
 	if err != nil {
