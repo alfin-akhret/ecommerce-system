@@ -28,7 +28,7 @@ type App struct {
 	CartHandler                  *cart.Handler
 	PaymentExpirationWorker      *payment.PaymentExpirationWorker
 	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
-	Queue                        *queue.Queue
+	Queue                        *queue.RedisQueue
 }
 
 func New() (*App, error) {
@@ -69,10 +69,17 @@ func New() (*App, error) {
 	registry.Register("send_email", jobs.SendEmailHandler)
 
 	// queue
-	queue := &queue.Queue{
-		Jobs:     make(chan queue.Job, 100),
+	/*
+		queue := &queue.Queue{
+			Jobs:     make(chan queue.Job, 100),
+			Registry: registry,
+			Dlq:      make(chan queue.Job, 100),
+		}
+	*/
+
+	queue := &queue.RedisQueue{
+		Client:   rdb,
 		Registry: registry,
-		Dlq:      make(chan queue.Job, 100),
 	}
 
 	// order

@@ -30,14 +30,14 @@ type Service struct {
 	product contracts.ProductManager
 	payment contracts.PaymentManager
 	cart    contracts.CartManager
-	queue   *queue.Queue
+	queue   *queue.RedisQueue
 }
 
 func NewService(db *pgxpool.Pool,
 	product contracts.ProductManager,
 	payment contracts.PaymentManager,
 	cart contracts.CartManager,
-	queue *queue.Queue) *Service {
+	queue *queue.RedisQueue) *Service {
 
 	repo := NewOrderRepository(db)
 
