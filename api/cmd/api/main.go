@@ -138,7 +138,7 @@ func main() {
 
 	// queue worker, see internal/queue
 	queueCtx, queueWorkerCancel := context.WithCancel(rootCtx)
-	go application.Queue.StartWorkers(queueCtx, 3)
+	go application.Queue.StartAll(queueCtx, 3)
 
 	// handle shutdown
 

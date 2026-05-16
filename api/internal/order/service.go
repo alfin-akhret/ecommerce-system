@@ -30,14 +30,14 @@ type Service struct {
 	product contracts.ProductManager
 	payment contracts.PaymentManager
 	cart    contracts.CartManager
-	queue   *queue.Queue
+	queue   *queue.RedisQueue
 }
 
 func NewService(db *pgxpool.Pool,
 	product contracts.ProductManager,
 	payment contracts.PaymentManager,
 	cart contracts.CartManager,
-	queue *queue.Queue) *Service {
+	queue *queue.RedisQueue) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -504,10 +504,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		Email:   "testingemail@gmail.com",
 	})
 
-	s.queue.Enqueue(queue.Job{
-		Type:    "send_email",
-		Payload: payload,
-		Timeout: 5 * time.Second,
+	s.queue.Enqueue(ctx, queue.Job{
+		Type:      "send_email",
+		Payload:   payload,
+		Timeout:   5 * time.Second,
+		Retry:     0,
+		MaxRetry:  3,
+		CreatedAt: time.Now(),
 	})
 
 	return orderRespnse, nil

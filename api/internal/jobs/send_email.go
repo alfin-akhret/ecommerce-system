@@ -17,6 +17,13 @@ type SendEmailPayload struct {
 func SendEmailHandler(ctx context.Context, payload []byte) error {
 	logger := helper.LoggerFromCtx(ctx)
 
+	// for testing
+	/*
+		delay := time.Duration(20) * time.Second
+		time.Sleep(delay)
+		return errors.New("something wrong")
+	*/
+
 	var p SendEmailPayload
 	json.Unmarshal(payload, &p)
 
