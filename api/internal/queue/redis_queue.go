@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strconv"
 	"time"
 
@@ -15,29 +16,90 @@ type RedisQueue struct {
 }
 
 func (q *RedisQueue) Enqueue(ctx context.Context, job Job) error {
-	data, _ := json.Marshal(job)
+	data, err := json.Marshal(job)
+	if err != nil {
+		return err
+	}
 
 	return q.client.LPush(ctx, "queue:jobs", data).Err()
 }
 
+func (q *RedisQueue) StartWorkers(ctx context.Context, n int) {
+	for i := 0; i < n; i++ {
+		go q.worker(ctx, i)
+	}
+}
+
 // worker (blocking)
-func (q *RedisQueue) StartWorker(ctx context.Context) {
+func (q *RedisQueue) worker(ctx context.Context, id int) {
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		default:
-			res, err := q.client.BRPopLPush(ctx, "queue:jobs", "queue:processing", 0).Result()
+			res, err := q.client.BLMove(ctx,
+				"queue:jobs",
+				"queue:processing",
+				"RIGHT",
+				"LEFT",
+				0).Result()
 			if err != nil {
+				if ctx.Err() != nil {
+					return
+				}
 				continue
 			}
 
 			var job Job
-			json.Unmarshal([]byte(res), &job)
+			if err := json.Unmarshal([]byte(res), &job); err != nil {
+				q.client.LRem(ctx, "queue:processing", 1, res)
+				continue
+			}
 
-			q.process(ctx, job)
+			err = q.process(ctx, job)
+			if err != nil {
+				continue
+			}
 
 			q.client.LRem(ctx, "queue:processing", 1, res)
+		}
+	}
+}
+
+func (q *RedisQueue) StartRecoveryWorker(ctx context.Context) {
+	ticker := time.NewTicker(10 * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			ticker.Stop()
+			return
+		case <-ticker.C:
+			q.recoverStaleJobs(ctx)
+		}
+	}
+}
+
+func (q *RedisQueue) recoverStaleJobs(ctx context.Context) {
+	// ambil semua job di queue:processing
+	jobs, err := q.client.LRange(ctx, "queue:processing", 0, -1).Result()
+	if err != nil {
+		return
+	}
+
+	for _, raw := range jobs {
+		var job Job
+		if err := json.Unmarshal([]byte(raw), &job); err != nil {
+			// kalau corrupt buang dari processing
+			q.client.LRem(ctx, "queue:processing", 1, raw)
+			continue
+		}
+
+		// cek apakah job udah terlalu lama nyangkut
+		if time.Since(job.CreatedAt) > job.Timeout*2 {
+			// requeue ke jobs
+			q.client.LPush(ctx, "queue:jobs", raw)
+			// hapus dari processing
+			q.client.LRem(ctx, "queueu:processing", 1, raw)
 		}
 	}
 }
@@ -65,9 +127,11 @@ func (q *RedisQueue) StartScheduler(ctx context.Context) {
 		case <-ticker.C:
 			now := float64(time.Now().Unix())
 
-			jobs, _ := q.client.ZRangeByScore(ctx, "queue:delayed", &redis.ZRangeBy{
-				Min: "0",
-				Max: strconv.FormatFloat(now, 'f', -1, 64),
+			jobs, _ := q.client.ZRangeArgs(ctx, redis.ZRangeArgs{
+				Key:     "queue:delayed",
+				Start:   "0",
+				Stop:    strconv.FormatFloat(now, 'f', -1, 64),
+				ByScore: true,
 			}).Result()
 
 			for _, j := range jobs {
@@ -85,14 +149,15 @@ func (q *RedisQueue) pushDLQ(ctx context.Context, job Job) {
 }
 
 // main process
-func (q *RedisQueue) process(ctx context.Context, job Job) {
+func (q *RedisQueue) process(ctx context.Context, job Job) error {
 	handler, ok := q.Registry.Get(job.Type)
 	if !ok {
 		// todo: log error
 
 		// push to DLQ
 		q.pushDLQ(ctx, job)
-		return
+		err := errors.New("failed to get job")
+		return err
 	}
 
 	jobCtx, cancel := context.WithTimeout(ctx, job.Timeout)
@@ -109,11 +174,17 @@ func (q *RedisQueue) process(ctx context.Context, job Job) {
 			job := job  // copy dulu job nya
 			job.Retry++ // baru mutasi
 
-			q.scheduleRetry(ctx, job)
-			return
+			// bikin konteks baru khusus untuk retry
+			retryCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+			defer cancel()
+
+			q.scheduleRetry(retryCtx, job)
+			return err
 		}
 
 		q.pushDLQ(ctx, job)
-		return
+		return err
 	}
+
+	return nil
 }
