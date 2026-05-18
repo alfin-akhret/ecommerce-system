@@ -1,7 +1,7 @@
 # Changelog
 
 ### v1.0
-- stable monolith
+- modular monolith
 
 ### v0.3
 - remove redis queue
