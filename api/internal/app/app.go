@@ -8,12 +8,11 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
-	"github.com/alfin-akhret/ecommerce-system/internal/jobs"
+	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
 	"github.com/alfin-akhret/ecommerce-system/internal/product"
-	"github.com/alfin-akhret/ecommerce-system/internal/queue"
 	"github.com/alfin-akhret/ecommerce-system/internal/user"
 )
 
@@ -28,7 +27,6 @@ type App struct {
 	CartHandler                  *cart.Handler
 	PaymentExpirationWorker      *payment.PaymentExpirationWorker
 	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
-	Queue                        *queue.RedisQueue
 }
 
 func New() (*App, error) {
@@ -61,12 +59,12 @@ func New() (*App, error) {
 
 	// queue
 	// 9. queue and worker
-	registry := &queue.Registry{
-		Handlers: make(map[string]queue.Handler),
-	}
+	// registry := &queue.Registry{
+	// 	Handlers: make(map[string]queue.Handler),
+	// }
 
-	// register send_email job to the queue
-	registry.Register("send_email", jobs.SendEmailHandler)
+	// // register send_email job to the queue
+	// registry.Register("send_email", jobs.SendEmailHandler)
 
 	// queue
 	/*
@@ -77,13 +75,30 @@ func New() (*App, error) {
 		}
 	*/
 
-	queue := &queue.RedisQueue{
-		Client:   rdb,
-		Registry: registry,
-	}
+	/*
+		queue := &queue.RedisQueue{
+			Client:   rdb,
+			Registry: registry,
+		}
+	*/
+
+	// in-memory message broker
+	broker := events.NewMemoryBroker()
+	// subscribers examples
+	// 1. email service
+	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
+		payload := event.Payload.(events.OrderCreatedPayload)
+		log.Printf("[Email] send email to=%s order_id=%s", payload.Email, payload.OrderID)
+	})
+	// 2. analytic service
+	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
+		payload := event.Payload.(events.OrderCreatedPayload)
+		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
+	})
 
 	// order
-	orderService := order.NewService(db, productService, paymentService, cartService, queue)
+	// order service uses message-broker to broadcast message
+	orderService := order.NewService(db, productService, paymentService, cartService, broker)
 	orderHandler := order.NewHandler(orderService)
 
 	paymentService.SetOrderStatusUpdater(orderService)
@@ -127,6 +142,5 @@ func New() (*App, error) {
 		CartHandler:                  cartHandler,
 		PaymentExpirationWorker:      expirationWorker,
 		IdempotencyKeyDeletionWorker: iKeyDeletWorker,
-		Queue:                        queue,
 	}, nil
 }

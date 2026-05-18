@@ -8,8 +8,7 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
-	"github.com/alfin-akhret/ecommerce-system/internal/jobs"
-	"github.com/alfin-akhret/ecommerce-system/internal/queue"
+	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -30,14 +29,14 @@ type Service struct {
 	product contracts.ProductManager
 	payment contracts.PaymentManager
 	cart    contracts.CartManager
-	queue   *queue.RedisQueue
+	broker  events.Broker
 }
 
 func NewService(db *pgxpool.Pool,
 	product contracts.ProductManager,
 	payment contracts.PaymentManager,
 	cart contracts.CartManager,
-	queue *queue.RedisQueue) *Service {
+	broker events.Broker) *Service {
 
 	repo := NewOrderRepository(db)
 
@@ -47,7 +46,7 @@ func NewService(db *pgxpool.Pool,
 		product: product,
 		payment: payment,
 		cart:    cart,
-		queue:   queue,
+		broker:  broker,
 	}
 }
 
@@ -499,18 +498,27 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 	}
 
 	// create send email job
-	payload, _ := json.Marshal(jobs.SendEmailPayload{
-		OrderID: orderID.String(),
-		Email:   "testingemail@gmail.com",
-	})
+	// payload, _ := json.Marshal(jobs.SendEmailPayload{
+	// 	OrderID: orderID.String(),
+	// 	Email:   "testingemail@gmail.com",
+	// })
 
-	s.queue.Enqueue(ctx, queue.Job{
-		Type:      "send_email",
-		Payload:   payload,
-		Timeout:   5 * time.Second,
-		Retry:     0,
-		MaxRetry:  3,
-		CreatedAt: time.Now(),
+	// s.queue.Enqueue(ctx, queue.Job{
+	// 	Type:      "send_email",
+	// 	Payload:   payload,
+	// 	Timeout:   5 * time.Second,
+	// 	Retry:     0,
+	// 	MaxRetry:  3,
+	// 	CreatedAt: time.Now(),
+	// })
+
+	// publish event order.created
+	s.broker.Publish(ctx, events.Event{
+		Name: "order.created",
+		Payload: events.OrderCreatedPayload{
+			OrderID: orderID.String(),
+			Email:   "testingemail@gmail.com",
+		},
 	})
 
 	return orderRespnse, nil
