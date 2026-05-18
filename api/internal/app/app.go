@@ -57,31 +57,6 @@ func New() (*App, error) {
 	// payment
 	paymentService := payment.NewService(db)
 
-	// queue
-	// 9. queue and worker
-	// registry := &queue.Registry{
-	// 	Handlers: make(map[string]queue.Handler),
-	// }
-
-	// // register send_email job to the queue
-	// registry.Register("send_email", jobs.SendEmailHandler)
-
-	// queue
-	/*
-		queue := &queue.Queue{
-			Jobs:     make(chan queue.Job, 100),
-			Registry: registry,
-			Dlq:      make(chan queue.Job, 100),
-		}
-	*/
-
-	/*
-		queue := &queue.RedisQueue{
-			Client:   rdb,
-			Registry: registry,
-		}
-	*/
-
 	// in-memory message broker
 	broker := events.NewMemoryBroker()
 	// subscribers examples

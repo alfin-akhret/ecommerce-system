@@ -497,21 +497,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	// create send email job
-	// payload, _ := json.Marshal(jobs.SendEmailPayload{
-	// 	OrderID: orderID.String(),
-	// 	Email:   "testingemail@gmail.com",
-	// })
-
-	// s.queue.Enqueue(ctx, queue.Job{
-	// 	Type:      "send_email",
-	// 	Payload:   payload,
-	// 	Timeout:   5 * time.Second,
-	// 	Retry:     0,
-	// 	MaxRetry:  3,
-	// 	CreatedAt: time.Now(),
-	// })
-
 	// publish event order.created
 	s.broker.Publish(ctx, events.Event{
 		Name: "order.created",

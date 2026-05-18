@@ -136,12 +136,6 @@ func main() {
 	application.PaymentExpirationWorker.Start(ctx)
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
 
-	// queue worker, see internal/queue
-	// queueCtx, queueWorkerCancel := context.WithCancel(rootCtx)
-	// go application.Queue.StartAll(queueCtx, 3)
-
-	// handle shutdown
-
 	// === 7. Run HTTP server
 	// jalankan di go routine
 	srv := &http.Server{
