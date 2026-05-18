@@ -137,8 +137,8 @@ func main() {
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
 
 	// queue worker, see internal/queue
-	queueCtx, queueWorkerCancel := context.WithCancel(rootCtx)
-	go application.Queue.StartAll(queueCtx, 3)
+	// queueCtx, queueWorkerCancel := context.WithCancel(rootCtx)
+	// go application.Queue.StartAll(queueCtx, 3)
 
 	// handle shutdown
 
@@ -172,7 +172,6 @@ func main() {
 
 	// ==== 8.2 stop workers
 	workerCancel()
-	queueWorkerCancel()
 
 	// ==== 8.3 shutdown tracer (flush span)
 	if err := shutdown(shutdownCtx); err != nil {
