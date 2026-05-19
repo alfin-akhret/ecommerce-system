@@ -9,6 +9,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
+	"github.com/alfin-akhret/ecommerce-system/internal/mail"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
@@ -56,22 +57,15 @@ func New() (*App, error) {
 
 	// in-memory message broker
 	broker := events.NewMemoryBroker()
-	// subscribers examples
-	// 1. email service
-	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
-		payload := event.Payload.(events.OrderCreatedPayload)
-		log.Printf("[Email] send email to=%s order_id=%s", payload.Email, payload.OrderID)
-	})
-
-	broker.Subscribe("payment.callback.processed", func(ctx context.Context, event events.Event) {
-		payload := event.Payload.(events.PaymentCallbackProcessed)
-		log.Printf("[Email] send email to=%s order_id=%s", "samplemail@gmail.com", payload.PaymentID, payload.OrderID, payload.Status)
-	})
 	// 2. analytic service
 	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
 		payload := event.Payload.(events.OrderCreatedPayload)
 		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
 	})
+
+	emailService := mail.NewService(broker)
+	emailService.SubscribeTo("order.created")
+	emailService.SubscribeTo("payment.callback.processed")
 
 	// payment
 	paymentService := payment.NewService(db, broker)
