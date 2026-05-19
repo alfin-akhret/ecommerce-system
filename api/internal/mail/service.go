@@ -23,8 +23,9 @@ func NewService(broker events.Broker, cfg *EmailConfig) *Service {
 }
 
 func (s *Service) SubscribeTo(topic string) {
-	log := helper.LoggerFromCtx(context.Background())
 	s.broker.Subscribe(topic, func(ctx context.Context, event events.Event) {
+		log := helper.LoggerFromCtx(ctx)
+
 		payload := EmailPayload{
 			From: s.cfg.DefaultSender,
 			To:   "user@anywhere.com",
@@ -36,7 +37,7 @@ func (s *Service) SubscribeTo(topic string) {
 			payload.Subject = "Order Created"
 			payload.Body = fmt.Sprintf("Your order with ID:%s has been created", p.OrderID)
 		case topic == "payment.callback.processed":
-			p := event.Payload.(events.PaymentCallbackProcessed)
+			p := event.Payload.(events.PaymentCallbackProcessedPayload)
 			payload.Subject = "Payment Status"
 			payload.Body = fmt.Sprintf("Your payment status with ID: %s for Order: %s was %s",
 				p.PaymentID, p.OrderID, p.Status)

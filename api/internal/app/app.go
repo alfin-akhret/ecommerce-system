@@ -81,28 +81,16 @@ func New() (*App, error) {
 	// order
 	// order service uses message-broker to broadcast message
 	orderService := order.NewService(db, productService, paymentService, cartService, broker)
+	orderService.SubscribeTo("payment.expired")
 	orderHandler := order.NewHandler(orderService)
 
 	paymentService.SetOrderStatusUpdater(orderService)
-
 	paymentHandler := payment.NewHandler(paymentService)
-
-	// publisher (sementara simple dulu)
-	eventPublisher := payment.NewInMemoryPublisher()
-	eventPublisher.Subscribe("payment.expired", func(ctx context.Context, payload any) {
-		event, ok := payload.(payment.PaymentExpiredEvent)
-		if !ok {
-			log.Printf("[Event] invalid payload for payment.expired: %T\n", payload)
-			return
-		}
-
-		orderService.CancelOrder(ctx, event.OrderID)
-	})
 
 	// worker
 	expirationWorker := payment.NewPaymentExpirationWorker(
 		paymentService,
-		eventPublisher,
+		broker,
 		10*time.Second,
 		100,
 	)

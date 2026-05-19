@@ -649,7 +649,7 @@ func (s *Service) processCallback(
 	)
 
 	// publish event, payment event failed or success
-	payload := events.PaymentCallbackProcessed{
+	payload := events.PaymentCallbackProcessedPayload{
 		OrderID:   payment.OrderID.String(),
 		PaymentID: paymentID,
 		Status:    nextStatus,
