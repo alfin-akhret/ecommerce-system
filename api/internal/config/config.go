@@ -12,6 +12,7 @@ type Config struct {
 	OTelExporterEndpoint string
 	SMTPHost             string
 	SMTPPort             string
+	EmailDefaultSender   string
 }
 
 func Load() *Config {
@@ -23,6 +24,7 @@ func Load() *Config {
 		OTelExporterEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
 		SMTPHost:             getEnv("SMTP_SERVER", "mailpit"),
 		SMTPPort:             getEnv("SMTP_SERVER", "1025"),
+		EmailDefaultSender:   getEnv("EMAIL_DEFAULT_SENDER", "noreply@testcommerce.com"),
 	}
 }
 

@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 	"fmt"
-	"strconv"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -12,23 +11,14 @@ import (
 )
 
 type Service struct {
-	broker   events.Broker
-	smtpHost string
-	smtpPort string
+	broker events.Broker
+	cfg    *EmailConfig
 }
 
-type EmailPayload struct {
-	From    string
-	To      string
-	Subject string
-	Body    string
-}
-
-func NewService(broker events.Broker, smtpHost string, smtpPort string) *Service {
+func NewService(broker events.Broker, cfg *EmailConfig) *Service {
 	return &Service{
-		broker:   broker,
-		smtpPort: smtpPort,
-		smtpHost: smtpHost,
+		broker: broker,
+		cfg:    cfg,
 	}
 }
 
@@ -36,7 +26,7 @@ func (s *Service) SubscribeTo(topic string) {
 	log := helper.LoggerFromCtx(context.Background())
 	s.broker.Subscribe(topic, func(ctx context.Context, event events.Event) {
 		payload := EmailPayload{
-			From: "noreply@simplecommerce.com",
+			From: s.cfg.DefaultSender,
 			To:   "user@anywhere.com",
 		}
 
@@ -72,10 +62,9 @@ func (s *Service) sendMail(ctx context.Context, payload EmailPayload) error {
 	m.SetHeader("Subject", payload.Subject)
 	m.SetBody("text/plain", payload.Body)
 
-	port, _ := strconv.Atoi(s.smtpPort)
 	d := mailClient.NewDialer(
-		s.smtpHost,
-		port,
+		s.cfg.SMTPHost,
+		s.cfg.SMTPPort,
 		"",
 		"",
 	)

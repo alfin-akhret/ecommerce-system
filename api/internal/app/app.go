@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
@@ -64,7 +65,13 @@ func New() (*App, error) {
 	})
 
 	// email service
-	emailService := mail.NewService(broker, cfg.SMTPHost, cfg.SMTPPort)
+	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
+	mailConfig := &mail.EmailConfig{
+		SMTPHost:      cfg.SMTPHost,
+		SMTPPort:      smtpPort,
+		DefaultSender: cfg.EmailDefaultSender,
+	}
+	emailService := mail.NewService(broker, mailConfig)
 	emailService.SubscribeTo("order.created")
 	emailService.SubscribeTo("payment.callback.processed")
 
