@@ -12,3 +12,9 @@ type OrderCreatedPayload struct {
 	OrderID string
 	Email   string
 }
+
+type PaymentCallbackProcessed struct {
+	PaymentID string
+	OrderID   string
+	Status    string
+}

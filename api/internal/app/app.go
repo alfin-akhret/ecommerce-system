@@ -54,9 +54,6 @@ func New() (*App, error) {
 	cartService := cart.NewCartService(cartRepo, productService)
 	cartHandler := cart.NewHandler(cartService)
 
-	// payment
-	paymentService := payment.NewService(db)
-
 	// in-memory message broker
 	broker := events.NewMemoryBroker()
 	// subscribers examples
@@ -65,11 +62,19 @@ func New() (*App, error) {
 		payload := event.Payload.(events.OrderCreatedPayload)
 		log.Printf("[Email] send email to=%s order_id=%s", payload.Email, payload.OrderID)
 	})
+
+	broker.Subscribe("payment.callback.processed", func(ctx context.Context, event events.Event) {
+		payload := event.Payload.(events.PaymentCallbackProcessed)
+		log.Printf("[Email] send email to=%s order_id=%s", "samplemail@gmail.com", payload.PaymentID, payload.OrderID, payload.Status)
+	})
 	// 2. analytic service
 	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
 		payload := event.Payload.(events.OrderCreatedPayload)
 		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
 	})
+
+	// payment
+	paymentService := payment.NewService(db, broker)
 
 	// order
 	// order service uses message-broker to broadcast message
