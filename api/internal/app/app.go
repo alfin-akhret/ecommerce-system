@@ -3,12 +3,14 @@ package app
 import (
 	"context"
 	"log"
+	"strconv"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
+	"github.com/alfin-akhret/ecommerce-system/internal/mail"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
@@ -54,48 +56,42 @@ func New() (*App, error) {
 	cartService := cart.NewCartService(cartRepo, productService)
 	cartHandler := cart.NewHandler(cartService)
 
-	// payment
-	paymentService := payment.NewService(db)
-
 	// in-memory message broker
 	broker := events.NewMemoryBroker()
-	// subscribers examples
-	// 1. email service
-	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
-		payload := event.Payload.(events.OrderCreatedPayload)
-		log.Printf("[Email] send email to=%s order_id=%s", payload.Email, payload.OrderID)
-	})
 	// 2. analytic service
 	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
 		payload := event.Payload.(events.OrderCreatedPayload)
 		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
 	})
 
+	// email service
+	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
+	mailConfig := &mail.EmailConfig{
+		SMTPHost:      cfg.SMTPHost,
+		SMTPPort:      smtpPort,
+		DefaultSender: cfg.EmailDefaultSender,
+	}
+	emailService := mail.NewService(broker, mailConfig)
+	emailService.SubscribeTo("order.created")
+	emailService.SubscribeTo("payment.callback.processed")
+	emailService.SubscribeTo("payment.expired")
+
+	// payment
+	paymentService := payment.NewService(db, broker)
+
 	// order
 	// order service uses message-broker to broadcast message
 	orderService := order.NewService(db, productService, paymentService, cartService, broker)
+	orderService.SubscribeTo("payment.expired")
 	orderHandler := order.NewHandler(orderService)
 
 	paymentService.SetOrderStatusUpdater(orderService)
-
 	paymentHandler := payment.NewHandler(paymentService)
-
-	// publisher (sementara simple dulu)
-	eventPublisher := payment.NewInMemoryPublisher()
-	eventPublisher.Subscribe("payment.expired", func(ctx context.Context, payload any) {
-		event, ok := payload.(payment.PaymentExpiredEvent)
-		if !ok {
-			log.Printf("[Event] invalid payload for payment.expired: %T\n", payload)
-			return
-		}
-
-		orderService.CancelOrder(ctx, event.OrderID)
-	})
 
 	// worker
 	expirationWorker := payment.NewPaymentExpirationWorker(
 		paymentService,
-		eventPublisher,
+		broker,
 		10*time.Second,
 		100,
 	)

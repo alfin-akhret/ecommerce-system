@@ -2,11 +2,13 @@ package payment
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/contracts"
+	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -21,6 +23,7 @@ type Service struct {
 	db                 *pgxpool.Pool
 	repo               *Repository
 	orderStatusUpdater contracts.OrderUpdater
+	broker             events.Broker
 }
 
 const (
@@ -41,10 +44,11 @@ var ErrInvalidStatus = errors.New("invalid payment status")
 var ErrOrderStatusUpdaterNotSet = errors.New("order status updater is not configured")
 var ErrPaymentExpired = errors.New("payment expired")
 
-func NewService(db *pgxpool.Pool) *Service {
+func NewService(db *pgxpool.Pool, broker events.Broker) *Service {
 	return &Service{
-		db:   db,
-		repo: NewRepository(db),
+		db:     db,
+		repo:   NewRepository(db),
+		broker: broker,
 	}
 }
 
@@ -642,6 +646,26 @@ func (s *Service) processCallback(
 		lPaymentID,
 		zap.String("order_id", payment.OrderID.String()),
 		lNextStatus,
+	)
+
+	// publish event, payment event failed or success
+	payload := events.PaymentCallbackProcessedPayload{
+		OrderID:   payment.OrderID.String(),
+		PaymentID: paymentID,
+		Status:    nextStatus,
+	}
+	s.broker.Publish(ctx, events.Event{
+		Name:    "payment.callback.processed",
+		Payload: payload,
+	})
+
+	payloadJson, _ := json.Marshal(payload)
+	log.Info(
+		"Payment: Published event: payment.callback.processed",
+		lPaymentID,
+		zap.String("order_id", payment.OrderID.String()),
+		lNextStatus,
+		zap.String("event payload", string(payloadJson)),
 	)
 
 	return nil

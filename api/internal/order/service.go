@@ -179,6 +179,13 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 }
 
 // subscribe to topic: "payment.expired"
+func (s *Service) SubscribeTo(topic string) {
+	s.broker.Subscribe(topic, func(ctx context.Context, event events.Event) {
+		payload := event.Payload.(events.PaymentExpiredPayload)
+		s.CancelOrder(ctx, payload.OrderID)
+	})
+}
+
 func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 	logger := helper.LoggerFromCtx(ctx)
 

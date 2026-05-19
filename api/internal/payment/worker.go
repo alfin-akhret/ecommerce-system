@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -21,8 +21,8 @@ type EventPublisher interface {
 }
 
 type PaymentExpirationWorker struct {
-	service   PaymentService
-	publisher EventPublisher
+	service PaymentService
+	broker  events.Broker
 
 	interval  time.Duration
 	batchSzie int
@@ -33,13 +33,13 @@ type PaymentExpirationWorker struct {
 
 func NewPaymentExpirationWorker(
 	service PaymentService,
-	publisher EventPublisher,
+	broker events.Broker,
 	interval time.Duration,
 	batchSize int,
 ) *PaymentExpirationWorker {
 	return &PaymentExpirationWorker{
 		service:   service,
-		publisher: publisher,
+		broker:    broker,
 		interval:  interval,
 		batchSzie: batchSize,
 	}
@@ -121,22 +121,16 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 			attribute.String("order_id", p.OrderID.String()),
 		)
 
-		event := PaymentExpiredEvent{
-			PaymentID: p.ID.String(),
-			OrderID:   p.OrderID.String(),
-			ExpiredAt: time.Now(),
+		event := events.Event{
+			Name: "payment.expired",
+			Payload: events.PaymentExpiredPayload{
+				OrderID:   p.OrderID.String(),
+				PaymentID: p.ID.String(),
+				Email:     "testingemail@gmail.com",
+			},
 		}
 
-		err := w.publisher.Publish(ctx, "payment.expired", event)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			logger.Error("[Payment Worker] failed publish event for payment", zap.String("payment_id", p.ID.String()), zap.Error(err))
-
-			// NOTE:
-			// di production → masukin ke retry / outbox
-			continue
-		}
+		w.broker.Publish(ctx, event)
 
 		logger.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))
 	}
