@@ -10,6 +10,8 @@ type Config struct {
 	RedisAddr            string
 	OTelServiceName      string
 	OTelExporterEndpoint string
+	SMTPHost             string
+	SMTPPort             string
 }
 
 func Load() *Config {
@@ -19,6 +21,8 @@ func Load() *Config {
 		RedisAddr:            getEnv("REDIS_ADDR", "localhost:6379"),
 		OTelServiceName:      getEnv("OTEL_SERVICE_NAME", "ecommerce-api"),
 		OTelExporterEndpoint: getEnv("OTEL_EXPORTER_OTLP_ENDPOINT", "localhost:4317"),
+		SMTPHost:             getEnv("SMTP_SERVER", "mailpit"),
+		SMTPPort:             getEnv("SMTP_SERVER", "1025"),
 	}
 }
 

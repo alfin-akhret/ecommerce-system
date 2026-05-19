@@ -63,7 +63,8 @@ func New() (*App, error) {
 		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
 	})
 
-	emailService := mail.NewService(broker)
+	// email service
+	emailService := mail.NewService(broker, cfg.SMTPHost, cfg.SMTPPort)
 	emailService.SubscribeTo("order.created")
 	emailService.SubscribeTo("payment.callback.processed")
 
