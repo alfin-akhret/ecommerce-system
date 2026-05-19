@@ -74,6 +74,7 @@ func New() (*App, error) {
 	emailService := mail.NewService(broker, mailConfig)
 	emailService.SubscribeTo("order.created")
 	emailService.SubscribeTo("payment.callback.processed")
+	emailService.SubscribeTo("payment.expired")
 
 	// payment
 	paymentService := payment.NewService(db, broker)

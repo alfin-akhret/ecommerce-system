@@ -41,6 +41,21 @@ func (s *Service) SubscribeTo(topic string) {
 			payload.Subject = "Payment Status"
 			payload.Body = fmt.Sprintf("Your payment status with ID: %s for Order: %s was %s",
 				p.PaymentID, p.OrderID, p.Status)
+		case topic == "payment.expired":
+			p := event.Payload.(events.PaymentExpiredPayload)
+			payload.Subject = "Payment Expired"
+			payload.Body = fmt.Sprintf(
+				`Your order information:
+
+Order ID: %s
+Payment ID: %s
+Order Status: CANCELED
+Payment Status: %s
+`,
+				p.OrderID,
+				p.PaymentID,
+				"EXPIRED",
+			)
 		}
 
 		err := s.sendMail(ctx, payload)

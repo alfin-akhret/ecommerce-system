@@ -20,7 +20,8 @@ type PaymentCallbackProcessedPayload struct {
 	Email     string
 }
 
-type OrderCanceledPayload struct {
-	OrderID string
-	Email   string
+type PaymentExpiredPayload struct {
+	OrderID   string
+	PaymentID string
+	Email     string
 }

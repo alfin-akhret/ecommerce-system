@@ -123,9 +123,10 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 		event := events.Event{
 			Name: "payment.expired",
-			Payload: events.OrderCanceledPayload{
-				OrderID: p.OrderID.String(),
-				Email:   "testingemail@gmail.com",
+			Payload: events.PaymentExpiredPayload{
+				OrderID:   p.OrderID.String(),
+				PaymentID: p.ID.String(),
+				Email:     "testingemail@gmail.com",
 			},
 		}
 
