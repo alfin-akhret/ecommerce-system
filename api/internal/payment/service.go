@@ -441,8 +441,8 @@ func (s *Service) HandleCallback(ctx context.Context, req PaymentCallbackRequest
 
 	log.Info("Payment: Handling payment callback", lPaymentID, lRequestedStatus)
 
-	tr := otel.Tracer("payment-service")
-	ctx, span := tr.Start(ctx, "HandleCallback")
+	tr := otel.Tracer("payment.service")
+	ctx, span := tr.Start(ctx, "payment.service.HandleCallback")
 	defer span.End()
 
 	span.SetAttributes(
@@ -534,12 +534,12 @@ func (s *Service) processCallback(
 
 	log.Info("Payment: Processing callback status transition", lPaymentID, lNextStatus)
 
-	tr := otel.Tracer("payment-service")
-	ctx, span := tr.Start(ctx, "processCallback")
+	tr := otel.Tracer("payment.service")
+	ctx, span := tr.Start(ctx, "payment.service.processCallback")
 	defer span.End()
 
-	span.SetAttributes(attribute.String("payment_id", paymentID),
-		attribute.String("payment_next_status", nextStatus),
+	span.SetAttributes(attribute.String("payment.id", paymentID),
+		attribute.String("payment.next_status", nextStatus),
 	)
 
 	if s.orderStatusUpdater == nil {
@@ -563,6 +563,11 @@ func (s *Service) processCallback(
 		log.Error("Payment: Failed to get payment for update during callback", lPaymentID, lNextStatus, zap.Error(err))
 		return err
 	}
+
+	span.SetAttributes(
+		attribute.String("payment.status", payment.Status),
+		attribute.String("order.id", payment.OrderID.String()),
+	)
 
 	if payment.Status != StatusPending {
 		if payment.Status == StatusExpired && nextStatus == StatusSuccess { // late payment

@@ -128,13 +128,20 @@ func (s *Service) UpdateStatus(ctx context.Context, orderID string, status strin
 }
 
 func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Order: confirming order stock")
 
 	tr := otel.Tracer("order.service")
 	ctx, span := tr.Start(ctx, "order.service.ConfirmOrderStockWithTx")
 	defer span.End()
 
+	span.SetAttributes(
+		attribute.String("order.id", orderID),
+	)
+
 	items, err := s.repo.ListOrderItems(ctx, orderID)
 	if err != nil {
+		log.Error("Order: failed getting order items", zap.String("error_message", err.Error()))
 		return err
 	}
 
@@ -142,8 +149,10 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 		if err := s.product.ConfirmStockWithTx(ctx, tx, item.ProductID.String(), item.Qty); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
+			log.Error("Order: failed confirming stock", zap.String("error_message", err.Error()))
 			return err
 		}
+
 	}
 
 	return nil
@@ -151,14 +160,22 @@ func (s *Service) ConfirmOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 
 func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderID string) error {
 
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Order: releaseing order stock")
+
 	tr := otel.Tracer("order.service")
 	ctx, span := tr.Start(ctx, "order.service.ReleaseOrderStockWithTx")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("order.id", orderID),
+	)
 
 	repo := s.repo.WithTx(tx)
 
 	items, err := repo.ListOrderItems(ctx, orderID)
 	if err != nil {
+		log.Error("Order: failed getting order items", zap.String("error_message", err.Error()))
 		return err
 	}
 
@@ -171,8 +188,15 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 		); err != nil {
 			span.RecordError(err)
 			span.SetStatus(codes.Error, err.Error())
+			log.Error("Order: failed releasing stock", zap.String("error_message", err.Error()))
 			return err
 		}
+
+		span.SetAttributes(
+			attribute.String("item.product.id", item.ID.String()),
+			attribute.Int64("item.product.price", item.Price),
+			attribute.Int("item.qty", item.Qty),
+		)
 	}
 
 	return nil
