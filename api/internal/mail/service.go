@@ -7,6 +7,9 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	mailClient "github.com/go-mail/mail/v2"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -64,12 +67,19 @@ Payment Status: %s
 			return
 		}
 
-		log.Info("Email sent", zap.String("to", payload.To), zap.String("Subject", payload.Subject))
 	})
 }
 
 func (s *Service) sendMail(ctx context.Context, payload EmailPayload) error {
 	log := helper.LoggerFromCtx(ctx)
+	tr := otel.Tracer("mail.service")
+	ctx, span := tr.Start(ctx, "mail.service.sendMail")
+	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("To", payload.To),
+		attribute.String("Subject", payload.Subject),
+	)
 
 	m := mailClient.NewMessage()
 
@@ -86,9 +96,13 @@ func (s *Service) sendMail(ctx context.Context, payload EmailPayload) error {
 	)
 
 	if err := d.DialAndSend(m); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
 		log.Error("Failed to send email", zap.String("error", err.Error()))
 		return err
 	}
+
+	log.Info("Email sent", zap.String("to", payload.To), zap.String("Subject", payload.Subject))
 
 	return nil
 
