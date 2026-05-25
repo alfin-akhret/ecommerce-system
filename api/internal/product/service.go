@@ -217,11 +217,15 @@ func (s *Service) ReleaseStock(ctx context.Context, productID string, qty int) e
 }
 
 func (s *Service) ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
-	tr := otel.Tracer("product-service")
-	ctx, span := tr.Start(ctx, "ReleaseStockWithTx")
+
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Product: releasing stock")
+
+	tr := otel.Tracer("product.service")
+	ctx, span := tr.Start(ctx, "product.service.ReleaseStockWithTx")
 	defer span.End()
 
-	span.SetAttributes(attribute.String("product_id", productID),
+	span.SetAttributes(attribute.String("product.id", productID),
 		attribute.Int("qty", qty),
 	)
 
@@ -239,6 +243,7 @@ func (s *Service) ReleaseStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	if err := repo.ReleasedReserved(ctx, productID, qty); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		log.Error("Product: failed releasing stock", zap.String("error_message", err.Error()))
 		return err
 	}
 
@@ -261,10 +266,17 @@ func (s *Service) ConfirmStock(ctx context.Context, productID string, qty int) e
 }
 
 func (s *Service) ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID string, qty int) error {
+	log := helper.LoggerFromCtx(ctx)
+	log.Info("Product: Confirming stock")
 
-	tr := otel.Tracer("product-service")
-	ctx, span := tr.Start(ctx, "ConfirmOrderStockWithTx")
+	tr := otel.Tracer("product.service")
+	ctx, span := tr.Start(ctx, "product.service.ConfirmStockWithTx")
 	defer span.End()
+
+	span.SetAttributes(
+		attribute.String("product.id", productID),
+		attribute.Int("qty", qty),
+	)
 
 	repo := s.repo.WithTx(tx)
 
@@ -280,6 +292,7 @@ func (s *Service) ConfirmStockWithTx(ctx context.Context, tx pgx.Tx, productID s
 	if err := repo.ConfirmStock(ctx, productID, qty); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
+		log.Error("Product: failed confirming stock", zap.String("error_message", err.Error()))
 		return err
 	}
 

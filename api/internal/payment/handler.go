@@ -86,7 +86,7 @@ func (h *Handler) HandleCallback(w http.ResponseWriter, r *http.Request) error {
 
 	ctx := r.Context()
 
-	tr := otel.Tracer("payment-service-http-handler")
+	tr := otel.Tracer("payment.handler")
 	ctx, span := tr.Start(ctx, "HandleCallback")
 	defer span.End()
 
