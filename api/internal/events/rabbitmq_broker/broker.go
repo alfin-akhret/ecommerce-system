@@ -24,16 +24,16 @@ func failOnError(err error, msg string) {
 	}
 }
 
-type Consumer struct {
+type Publisher struct {
 	topic string
 }
 
-func CreateNewConsumer(topic string) *Consumer {
-	c := &Consumer{topic: topic}
+func CreateNewPublisher(topic string) *Publisher {
+	c := &Publisher{topic: topic}
 	return c
 }
 
-func (c *Consumer) Connect() {
+func (c *Publisher) Connect() {
 	// open connection
 	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
 	failOnError(err, "Failed to connect to rabbitMQ")

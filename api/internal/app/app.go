@@ -66,7 +66,7 @@ func New() (*App, error) {
 	})
 
 	// testing RabbitMQ
-	rabbitMQConsumer := rabbitmqbroker.CreateNewConsumer("hello")
+	rabbitMQConsumer := rabbitmqbroker.CreateNewPublisher("hello")
 	rabbitMQConsumer.Connect()
 
 	// email service
