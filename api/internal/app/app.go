@@ -10,6 +10,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
+	rabbitmqbroker "github.com/alfin-akhret/ecommerce-system/internal/events/rabbitmq_broker"
 	"github.com/alfin-akhret/ecommerce-system/internal/mail"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
@@ -63,6 +64,10 @@ func New() (*App, error) {
 		payload := event.Payload.(events.OrderCreatedPayload)
 		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
 	})
+
+	// testing RabbitMQ
+	rabbitMQConsumer := rabbitmqbroker.CreateNewConsumer("hello")
+	rabbitMQConsumer.Connect()
 
 	// email service
 	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
