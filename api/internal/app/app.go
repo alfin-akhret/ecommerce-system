@@ -66,8 +66,11 @@ func New() (*App, error) {
 	})
 
 	// testing RabbitMQ
-	rabbitMQConsumer := rabbitmqbroker.CreateNewPublisher("hello")
-	rabbitMQConsumer.Connect()
+	topic := "hello"
+	rabbitMQPublisher := rabbitmqbroker.CreateNewPublisher(topic)
+	rabbitMQPublisher.Publish()
+	rabbitMQConsumer := rabbitmqbroker.CreateNewConsumer(topic)
+	rabbitMQConsumer.Consume()
 
 	// email service
 	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
