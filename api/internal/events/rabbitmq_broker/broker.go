@@ -2,22 +2,30 @@ package rabbitmqbroker
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"log"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
+	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 type RabbitMQBroker struct {
-	host string
+	conn  *amqp.Connection
+	pubCh *amqp.Channel
 }
 
-func CreateNewBroker(host string) *RabbitMQBroker {
+func CreateNewBroker(connString string) *RabbitMQBroker {
+	conn, err := amqp.Dial(connString)
+	failOnError(err, "Failed to connect to rabbitMQ")
+
+	pubCh, err := conn.Channel()
+	failOnError(err, "Failed to open channel")
+
 	return &RabbitMQBroker{
-		host: host,
+		conn:  conn,
+		pubCh: pubCh, // publisher channel
 	}
 }
 
@@ -27,29 +35,11 @@ func failOnError(err error, msg string) {
 	}
 }
 
-type Publisher struct {
-	topic string
-}
-
-func CreateNewPublisher(topic string) *Publisher {
-	p := &Publisher{topic: topic}
-	return p
-}
-
-func (p *Publisher) Publish() {
-	// open connection
-	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
-	failOnError(err, "Failed to connect to rabbitMQ")
-	defer conn.Close()
-
-	// open channel
-	ch, err := conn.Channel()
-	failOnError(err, "Failed to open channel")
-	defer ch.Close()
+func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 
 	// create queue
-	q, err := ch.QueueDeclare(
-		p.topic,
+	q, err := r.pubCh.QueueDeclare(
+		event.Name,
 		true,
 		false,
 		false,
@@ -59,47 +49,37 @@ func (p *Publisher) Publish() {
 		},
 	)
 	failOnError(err, "failed to declare a queue")
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
 	// publish
-	body := "Hello World!"
-	err = ch.PublishWithContext(ctx,
+	body, err := json.Marshal(event.Payload)
+	if err != nil {
+		log.Printf("Error parsing event payload: %v", err.Error())
+		return
+	}
+	err = r.pubCh.PublishWithContext(publishCtx,
 		"",     // exchange
 		q.Name, // routing key
 		false,  // mandatory
 		false,  // immediate
 		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(body),
+			ContentType: "application/json",
+			Body:        body,
 		})
 	failOnError(err, "Failed to publish a message")
-	log.Printf(" [x] Sent %s\n", body)
+	log.Printf(" [x] Sent %v\n", body)
 }
 
-type Consumer struct {
-	topic string
-}
+func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 
-func CreateNewConsumer(topic string) *Consumer {
-	c := &Consumer{topic: topic}
-	return c
-}
-
-func (c *Consumer) Consume() {
-	// open connection
-	conn, err := amqp.Dial("amqp://guest:guest@rabbitmq:5672/")
-	failOnError(err, "Failed to connect to rabbitMQ")
-	defer conn.Close()
-
-	// open channel
-	ch, err := conn.Channel()
+	// open new channel for each subscriber
+	ch, err := r.conn.Channel()
 	failOnError(err, "Failed to open channel")
-	defer ch.Close()
 
 	// create queue
 	q, err := ch.QueueDeclare(
-		c.topic,
+		eventName,
 		true,
 		false,
 		false,
@@ -110,11 +90,11 @@ func (c *Consumer) Consume() {
 	)
 	failOnError(err, "failed to declare a queue")
 
-	// publish
+	// consume
 	msgs, err := ch.Consume(
 		q.Name, // queue
 		"",     // consumer
-		true,   // auto-ack
+		false,  // auto-ack
 		false,  // exclusive
 		false,  // no-local
 		false,  // no-wait
@@ -125,16 +105,65 @@ func (c *Consumer) Consume() {
 	go func() {
 		for d := range msgs {
 			log.Printf("Received a message: %s", d.Body)
+
+			event, err := decodeEvent(eventName, d.Body)
+			if err != nil {
+				d.Nack(false, false)
+				continue
+			}
+
+			ctx := context.Background()
+			handler(ctx, event)
+
+			d.Ack(false)
 		}
 	}()
 
-	log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-	// Create a channel to receive OS signals
-	chn := make(chan os.Signal, 1)
-	// Notify the channel for SIGINT (CTRL+C) and SIGTERM
-	signal.Notify(chn, os.Interrupt, syscall.SIGTERM)
-	// Block until a signal is received
-	<-chn
-	log.Printf("Shutting down gracefully...")
-	// Deferred conn.Close() and ch.Close() will execute!
+	/*
+		log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
+		// Create a channel to receive OS signals
+		chn := make(chan os.Signal, 1)
+		// Notify the channel for SIGINT (CTRL+C) and SIGTERM
+		signal.Notify(chn, os.Interrupt, syscall.SIGTERM)
+		// Block until a signal is received
+		<-chn
+		log.Printf("Shutting down gracefully...")
+		// Deferred conn.Close() and ch.Close() will execute!
+	*/
+}
+
+func decodeEvent(eventName string, body []byte) (events.Event, error) {
+	event := events.Event{
+		Name:      eventName,
+		CreatedAt: time.Now(),
+	}
+
+	switch eventName {
+	case "order.created":
+		var payload events.OrderCreatedPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return event, err
+		}
+		event.Payload = payload
+
+	case "payment.callback.processed":
+		var payload events.PaymentCallbackProcessedPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return event, err
+		}
+		event.Payload = payload
+
+	case "payment.expired":
+		var payload events.PaymentExpiredPayload
+		if err := json.Unmarshal(body, &payload); err != nil {
+			return event, err
+		}
+		event.Payload = payload
+
+	default:
+		return event, fmt.Errorf("unknown event name: %s", eventName)
+	}
+
+	return event, nil
+
 }

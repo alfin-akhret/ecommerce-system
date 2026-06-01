@@ -13,6 +13,7 @@ type Config struct {
 	SMTPHost             string
 	SMTPPort             string
 	EmailDefaultSender   string
+	RabbitMQHost         string
 }
 
 func Load() *Config {
@@ -25,6 +26,7 @@ func Load() *Config {
 		SMTPHost:             getEnv("SMTP_SERVER", "mailpit"),
 		SMTPPort:             getEnv("SMTP_SERVER", "1025"),
 		EmailDefaultSender:   getEnv("EMAIL_DEFAULT_SENDER", "noreply@testcommerce.com"),
+		RabbitMQHost:         getEnv("RABBITMQ_HOST", "amqp://guest:guest@rabbitmq:5672"),
 	}
 }
 
