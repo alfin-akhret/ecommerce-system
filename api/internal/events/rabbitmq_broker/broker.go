@@ -12,8 +12,9 @@ import (
 )
 
 type RabbitMQBroker struct {
-	conn  *amqp.Connection
-	pubCh *amqp.Channel
+	conn        *amqp.Connection
+	publisherCh *amqp.Channel
+	consumerChs []*amqp.Channel
 }
 
 func CreateNewBroker(connString string) *RabbitMQBroker {
@@ -24,8 +25,8 @@ func CreateNewBroker(connString string) *RabbitMQBroker {
 	failOnError(err, "Failed to open channel")
 
 	return &RabbitMQBroker{
-		conn:  conn,
-		pubCh: pubCh, // publisher channel
+		conn:        conn,
+		publisherCh: pubCh,
 	}
 }
 
@@ -38,7 +39,7 @@ func failOnError(err error, msg string) {
 func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 
 	// create queue
-	q, err := r.pubCh.QueueDeclare(
+	q, err := r.publisherCh.QueueDeclare(
 		event.Name,
 		true,
 		false,
@@ -58,7 +59,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 		log.Printf("Error parsing event payload: %v", err.Error())
 		return
 	}
-	err = r.pubCh.PublishWithContext(publishCtx,
+	err = r.publisherCh.PublishWithContext(publishCtx,
 		"",     // exchange
 		q.Name, // routing key
 		false,  // mandatory
@@ -76,6 +77,8 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 	// open new channel for each subscriber
 	ch, err := r.conn.Channel()
 	failOnError(err, "Failed to open channel")
+
+	r.consumerChs = append(r.consumerChs, ch)
 
 	// create queue
 	q, err := ch.QueueDeclare(
@@ -119,17 +122,6 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 		}
 	}()
 
-	/*
-		log.Printf(" [*] Waiting for messages. To exit press CTRL+C")
-		// Create a channel to receive OS signals
-		chn := make(chan os.Signal, 1)
-		// Notify the channel for SIGINT (CTRL+C) and SIGTERM
-		signal.Notify(chn, os.Interrupt, syscall.SIGTERM)
-		// Block until a signal is received
-		<-chn
-		log.Printf("Shutting down gracefully...")
-		// Deferred conn.Close() and ch.Close() will execute!
-	*/
 }
 
 func decodeEvent(eventName string, body []byte) (events.Event, error) {
@@ -166,4 +158,24 @@ func decodeEvent(eventName string, body []byte) (events.Event, error) {
 
 	return event, nil
 
+}
+
+func (r *RabbitMQBroker) Close() error {
+	for _, ch := range r.consumerChs {
+		if err := ch.Close(); err != nil {
+			log.Printf("failed to close consumer channerl: %v", err)
+		}
+	}
+
+	if r.publisherCh != nil {
+		if err := r.publisherCh.Close(); err != nil {
+			log.Printf("failed to close publisher channel: %v", err)
+		}
+	}
+
+	if r.conn != nil {
+		return r.conn.Close()
+	}
+
+	return nil
 }

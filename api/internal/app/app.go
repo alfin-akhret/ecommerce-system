@@ -27,6 +27,7 @@ type App struct {
 	CartHandler                  *cart.Handler
 	PaymentExpirationWorker      *payment.PaymentExpirationWorker
 	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
+	Broker                       *rabbitmqbroker.RabbitMQBroker
 }
 
 func New() (*App, error) {
@@ -116,5 +117,6 @@ func New() (*App, error) {
 		CartHandler:                  cartHandler,
 		PaymentExpirationWorker:      expirationWorker,
 		IdempotencyKeyDeletionWorker: iKeyDeletWorker,
+		Broker:                       broker,
 	}, nil
 }
