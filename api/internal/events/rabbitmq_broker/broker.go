@@ -3,7 +3,6 @@ package rabbitmqbroker
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
@@ -38,18 +37,28 @@ func failOnError(err error, msg string) {
 
 func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 
-	// create queue
+	// create main queue
 	q, err := r.publisherCh.QueueDeclare(
 		event.Name,
 		true,
 		false,
 		false,
 		false,
-		amqp.Table{
-			amqp.QueueTypeArg: amqp.QueueTypeQuorum,
-		},
+		queueArgs(event.Name),
 	)
 	failOnError(err, "failed to declare a queue")
+
+	// create DLQ queue
+	_, err = r.publisherCh.QueueDeclare(
+		event.Name+".dlq",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
+	failOnError(err, "failed to declare a queue")
+
 	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -88,9 +97,7 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 		false,
 		false,
 		false,
-		amqp.Table{
-			amqp.QueueTypeArg: amqp.QueueTypeQuorum,
-		},
+		queueArgs(eventName),
 	)
 	failOnError(err, "failed to declare a queue")
 
@@ -117,7 +124,7 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 
 			event, err := decodeEvent(eventName, d.Body)
 			if err != nil {
-				if nackErr := d.Nack(false, true); nackErr != nil {
+				if nackErr := d.Nack(false, false); nackErr != nil {
 					log.Printf("Failed to NACK event: %v", nackErr.Error())
 				}
 				log.Printf("Failed to decode event: %v", err.Error())
@@ -129,7 +136,7 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 			if err != nil {
 				// jika handler error dan NACK berhasil, maka message akan masuk lagi ke queue
 				// dan akan di retry
-				if nackErr := d.Nack(false, true); nackErr != nil {
+				if nackErr := d.Nack(false, false); nackErr != nil {
 					// jika NACK error, print log
 					log.Printf("Failed to NACK event: %v", nackErr.Error())
 				}
@@ -143,42 +150,6 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 			}
 		}
 	}()
-
-}
-
-func decodeEvent(eventName string, body []byte) (events.Event, error) {
-	event := events.Event{
-		Name:      eventName,
-		CreatedAt: time.Now(),
-	}
-
-	switch eventName {
-	case "order.created":
-		var payload events.OrderCreatedPayload
-		if err := json.Unmarshal(body, &payload); err != nil {
-			return event, err
-		}
-		event.Payload = payload
-
-	case "payment.callback.processed":
-		var payload events.PaymentCallbackProcessedPayload
-		if err := json.Unmarshal(body, &payload); err != nil {
-			return event, err
-		}
-		event.Payload = payload
-
-	case "payment.expired":
-		var payload events.PaymentExpiredPayload
-		if err := json.Unmarshal(body, &payload); err != nil {
-			return event, err
-		}
-		event.Payload = payload
-
-	default:
-		return event, fmt.Errorf("unknown event name: %s", eventName)
-	}
-
-	return event, nil
 
 }
 

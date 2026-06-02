@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -65,9 +64,11 @@ Payment Status: %s
 
 		log.Info("Sending email...", zap.String("body", payload.Body))
 
-		if rand.Intn(3) == 0 {
-			return errors.New("smtp failed")
-		}
+		// testing: fail send email
+		// if rand.Intn(3) == 0 {
+		// 	return errors.New("smtp failed")
+		// }
+		return errors.New("forced failure")
 
 		err := s.sendMail(ctx, payload)
 		if err != nil {
