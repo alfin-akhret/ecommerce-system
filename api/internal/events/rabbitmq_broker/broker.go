@@ -65,8 +65,9 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 		false,  // mandatory
 		false,  // immediate
 		amqp.Publishing{
-			ContentType: "application/json",
-			Body:        body,
+			ContentType:  "application/json",
+			Body:         body,
+			DeliveryMode: amqp.Persistent,
 		})
 	failOnError(err, "Failed to publish a message")
 	log.Printf(" [x] Sent %v\n", body)
@@ -93,6 +94,11 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 	)
 	failOnError(err, "failed to declare a queue")
 
+	// set Qos
+	if err := ch.Qos(1, 0, false); err != nil {
+		failOnError(err, "failed to set QoS")
+	}
+
 	// consume
 	msgs, err := ch.Consume(
 		q.Name, // queue
@@ -111,7 +117,9 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 
 			event, err := decodeEvent(eventName, d.Body)
 			if err != nil {
-				d.Nack(false, false)
+				if nackErr := d.Nack(false, true); nackErr != nil {
+					log.Printf("Failed to NACK event: %v", nackErr.Error())
+				}
 				log.Printf("Failed to decode event: %v", err.Error())
 				continue
 			}
@@ -119,12 +127,20 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 			ctx := context.Background()
 			err = handler(ctx, event)
 			if err != nil {
-				d.Nack(false, false)
+				// jika handler error dan NACK berhasil, maka message akan masuk lagi ke queue
+				// dan akan di retry
+				if nackErr := d.Nack(false, true); nackErr != nil {
+					// jika NACK error, print log
+					log.Printf("Failed to NACK event: %v", nackErr.Error())
+				}
 				log.Printf("Handler failed: %v", err.Error())
 				continue
 			}
 
-			d.Ack(false)
+			if ackErr := d.Ack(false); ackErr != nil {
+				log.Printf("Failed to ACK event: %v", ackErr.Error())
+				continue
+			}
 		}
 	}()
 

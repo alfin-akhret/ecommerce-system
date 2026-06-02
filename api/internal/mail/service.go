@@ -2,7 +2,9 @@ package mail
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"math/rand"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -59,6 +61,12 @@ Payment Status: %s
 				p.PaymentID,
 				"EXPIRED",
 			)
+		}
+
+		log.Info("Sending email...", zap.String("body", payload.Body))
+
+		if rand.Intn(3) == 0 {
+			return errors.New("smtp failed")
 		}
 
 		err := s.sendMail(ctx, payload)
