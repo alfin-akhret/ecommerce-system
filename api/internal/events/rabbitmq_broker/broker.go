@@ -112,11 +112,17 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 			event, err := decodeEvent(eventName, d.Body)
 			if err != nil {
 				d.Nack(false, false)
+				log.Printf("Failed to decode event: %v", err.Error())
 				continue
 			}
 
 			ctx := context.Background()
-			handler(ctx, event)
+			err = handler(ctx, event)
+			if err != nil {
+				d.Nack(false, false)
+				log.Printf("Handler failed: %v", err.Error())
+				continue
+			}
 
 			d.Ack(false)
 		}

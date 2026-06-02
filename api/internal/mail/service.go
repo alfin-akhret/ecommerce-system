@@ -26,7 +26,7 @@ func NewService(broker events.Broker, cfg *EmailConfig) *Service {
 }
 
 func (s *Service) SubscribeTo(topic string) {
-	s.broker.Subscribe(topic, func(ctx context.Context, event events.Event) {
+	s.broker.Subscribe(topic, func(ctx context.Context, event events.Event) error {
 		log := helper.LoggerFromCtx(ctx)
 
 		payload := EmailPayload{
@@ -64,9 +64,10 @@ Payment Status: %s
 		err := s.sendMail(ctx, payload)
 		if err != nil {
 			log.Error("Something wrong", zap.String("error", err.Error()))
-			return
+			return err
 		}
 
+		return nil
 	})
 }
 
