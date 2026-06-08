@@ -11,13 +11,14 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+const eventExchange = "ecommerce.events"
+
 type RabbitMQBroker struct {
 	conn        *amqp.Connection
 	publisherCh *amqp.Channel
 	consumerChs []*amqp.Channel
 
-	mu             sync.Mutex
-	declaredQueues map[string]bool
+	mu sync.Mutex
 }
 
 func CreateNewBroker(connString string) *RabbitMQBroker {
@@ -27,38 +28,28 @@ func CreateNewBroker(connString string) *RabbitMQBroker {
 	pubCh, err := conn.Channel()
 	failOnError(err, "Failed to open channel")
 
-	return &RabbitMQBroker{
-		conn:           conn,
-		publisherCh:    pubCh,
-		declaredQueues: make(map[string]bool),
+	b := &RabbitMQBroker{
+		conn:        conn,
+		publisherCh: pubCh,
 	}
+
+	if err := b.declareExchange(pubCh); err != nil {
+		failOnError(err, "failed to declare exchange")
+	}
+
+	return b
 }
 
-func (r *RabbitMQBroker) ensureQueue(eventName string) error {
-	r.mu.Lock()
-	defer r.mu.Unlock()
-
-	if r.declaredQueues[eventName] {
-		return nil
-	}
-
-	if err := declareQueue(r.publisherCh, eventName); err != nil {
-		return err
-	}
-
-	r.declaredQueues[eventName] = true
-	return nil
-
-}
-
-func declareQueue(ch *amqp.Channel, eventName string) error {
-	_, err := ch.QueueDeclare(eventName, true, false, false, false, queueArgs(eventName))
-	if err != nil {
-		return err
-	}
-
-	_, err = ch.QueueDeclare(eventName+".dlq", true, false, false, false, nil)
-	return err
+func (r *RabbitMQBroker) declareExchange(ch *amqp.Channel) error {
+	return ch.ExchangeDeclare(
+		eventExchange,
+		"topic",
+		true,
+		false,
+		false,
+		false,
+		nil,
+	)
 }
 
 func failOnError(err error, msg string) {
@@ -69,14 +60,6 @@ func failOnError(err error, msg string) {
 
 func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryCount int) error {
 
-	if err := r.ensureQueue(event.Name); err != nil {
-		log.Printf("failed to declare queue")
-		return err
-	}
-
-	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
 	// publish
 	body, err := json.Marshal(event.Payload)
 	if err != nil {
@@ -84,20 +67,23 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 		return err
 	}
 
-	// set retry count on rabbitMQ header
-	headers := amqp.Table{
-		"x-retry-count": retryCount,
-	}
-	err = r.publisherCh.PublishWithContext(publishCtx,
-		"",         // exchange
-		event.Name, // routing key
-		false,      // mandatory
-		false,      // immediate
+	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	err = r.publisherCh.PublishWithContext(
+		publishCtx,
+		eventExchange, // exchange
+		event.Name,    // routing key
+		false,         // mandatory
+		false,         // immediate
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         body,
 			DeliveryMode: amqp.Persistent,
-			Headers:      headers,
+			Timestamp:    time.Now(),
+			Headers: amqp.Table{
+				"x-retry-count": retryCount,
+			},
 		})
 	if err != nil {
 		log.Printf(" [x] Sent %v\n", body)
@@ -106,18 +92,44 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 	return nil
 }
 
-func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
+func (r *RabbitMQBroker) Subscribe(eventName string, subscriberName string, handler events.Handler) {
 
 	// open new channel for each subscriber
 	ch, err := r.conn.Channel()
 	failOnError(err, "Failed to open channel")
 
+	r.mu.Lock()
 	r.consumerChs = append(r.consumerChs, ch)
+	r.mu.Unlock()
 
-	// create queue
-	if err := declareQueue(ch, eventName); err != nil {
-		log.Printf("failed to declare queue: %v", err)
+	if err := r.declareExchange(ch); err != nil {
+		failOnError(err, "failed to declare exchange")
 	}
+
+	queueName := subscriberName + "." + eventName
+	dlqName := queueName + ".dlq"
+
+	_, err = ch.QueueDeclare(dlqName,
+		true, false, false, false, nil)
+	failOnError(err, "failed to declare DLQ")
+
+	_, err = ch.QueueDeclare(queueName,
+		true, false, false, false,
+		amqp.Table{
+			amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
+			"x-dead-letter-exchange":    "",
+			"x-dead-letter-routing-key": dlqName,
+		})
+	failOnError(err, "failed to declare queue")
+
+	err = ch.QueueBind(
+		queueName,
+		eventName,
+		eventExchange,
+		false,
+		nil,
+	)
+	failOnError(err, "failed to bind queue")
 
 	// set Qos
 	if err := ch.Qos(1, 0, false); err != nil {
@@ -140,57 +152,34 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 		for d := range msgs {
 			log.Printf("Received a message: %s", d.Body)
 
-			retryCount := 0
-
-			if d.Headers != nil {
-				if v, ok := d.Headers["x-retry-count"]; ok {
-					switch val := v.(type) {
-					case int32:
-						retryCount = int(val)
-					case int64:
-						retryCount = int(val)
-					case int:
-						retryCount = val
-					}
-				}
-			}
+			retryCount := getRetryCount(d.Headers)
 
 			event, err := decodeEvent(eventName, d.Body)
 			if err != nil {
-				if nackErr := d.Nack(false, false); nackErr != nil {
-					log.Printf("Failed to NACK event: %v", nackErr.Error())
-				}
-				log.Printf("Failed to decode event: %v", err.Error())
+				_ = d.Nack(false, false)
 				continue
 			}
 
 			ctx := context.Background()
-			err = handler(ctx, event)
-			if err != nil {
-				if retryCount > 3 {
-					if nackErr := d.Nack(false, false); nackErr != nil {
-						log.Printf("failed to NACK event: %v", nackErr)
-					}
+
+			if err := handler(ctx, event); err != nil {
+				if retryCount >= 3 {
+					_ = d.Nack(false, false)
 					continue
 				}
 
-				retryCount += 1
-
-				if err := r.Publish(ctx, event, retryCount); err != nil {
-					_ = d.Nack(false, true)
+				if err := r.Publish(ctx, event, retryCount+1); err != nil {
+					_ = d.Nack(false, false)
 					continue
 				}
 
 				_ = d.Ack(false)
-			}
-
-			if ackErr := d.Ack(false); ackErr != nil {
-				log.Printf("Failed to ACK event: %v", ackErr.Error())
 				continue
 			}
+
+			_ = d.Ack(false)
 		}
 	}()
-
 }
 
 func (r *RabbitMQBroker) Close() error {

@@ -45,6 +45,28 @@ func decodeEvent(eventName string, body []byte) (events.Event, error) {
 
 }
 
+func getRetryCount(headers amqp.Table) int {
+	if headers == nil {
+		return 0
+	}
+
+	v, ok := headers["x-retry-count"]
+	if !ok {
+		return 0
+	}
+
+	switch val := v.(type) {
+	case int:
+		return val
+	case int32:
+		return int(val)
+	case int64:
+		return int(val)
+	default:
+		return 0
+	}
+}
+
 func queueArgs(eventName string) amqp.Table {
 	return amqp.Table{
 		amqp.QueueTypeArg:           amqp.QueueTypeQuorum,
