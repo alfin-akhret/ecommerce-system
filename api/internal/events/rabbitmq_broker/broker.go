@@ -14,6 +14,8 @@ type RabbitMQBroker struct {
 	conn        *amqp.Connection
 	publisherCh *amqp.Channel
 	consumerChs []*amqp.Channel
+
+	declaredQueues map[string]bool
 }
 
 func CreateNewBroker(connString string) *RabbitMQBroker {
@@ -24,9 +26,39 @@ func CreateNewBroker(connString string) *RabbitMQBroker {
 	failOnError(err, "Failed to open channel")
 
 	return &RabbitMQBroker{
-		conn:        conn,
-		publisherCh: pubCh,
+		conn:           conn,
+		publisherCh:    pubCh,
+		declaredQueues: make(map[string]bool),
 	}
+}
+
+func (r *RabbitMQBroker) ensureQueue(eventName string) error {
+	if r.declaredQueues[eventName] {
+		return nil
+	}
+
+	_, err := r.publisherCh.QueueDeclare(eventName, true, false, false, false, queueArgs(eventName))
+	if err != nil {
+		return err
+	}
+
+	_, err = r.publisherCh.QueueDeclare(eventName+".dlq", true, false, false, false, nil)
+	if err != nil {
+		return err
+	}
+
+	r.declaredQueues[eventName] = true
+	return nil
+}
+
+func declareQueue(ch *amqp.Channel, eventName string) error {
+	_, err := ch.QueueDeclare(eventName, true, false, false, false, queueArgs(eventName))
+	if err != nil {
+		return err
+	}
+
+	_, err = ch.QueueDeclare(eventName+".dlq", true, false, false, false, nil)
+	return err
 }
 
 func failOnError(err error, msg string) {
@@ -37,27 +69,10 @@ func failOnError(err error, msg string) {
 
 func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryCount int) error {
 
-	// create main queue
-	q, err := r.publisherCh.QueueDeclare(
-		event.Name,
-		true,
-		false,
-		false,
-		false,
-		queueArgs(event.Name),
-	)
-	failOnError(err, "failed to declare a queue")
-
-	// create DLQ queue
-	_, err = r.publisherCh.QueueDeclare(
-		event.Name+".dlq",
-		true,
-		false,
-		false,
-		false,
-		nil,
-	)
-	failOnError(err, "failed to declare a queue")
+	if err := r.ensureQueue(event.Name); err != nil {
+		log.Printf("failed to declare queue")
+		return err
+	}
 
 	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
@@ -74,19 +89,21 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 		"x-retry-count": retryCount,
 	}
 	err = r.publisherCh.PublishWithContext(publishCtx,
-		"",     // exchange
-		q.Name, // routing key
-		false,  // mandatory
-		false,  // immediate
+		"",         // exchange
+		event.Name, // routing key
+		false,      // mandatory
+		false,      // immediate
 		amqp.Publishing{
 			ContentType:  "application/json",
 			Body:         body,
 			DeliveryMode: amqp.Persistent,
 			Headers:      headers,
 		})
-	failOnError(err, "Failed to publish a message")
-	log.Printf(" [x] Sent %v\n", body)
-	return err
+	if err != nil {
+		log.Printf(" [x] Sent %v\n", body)
+		return err
+	}
+	return nil
 }
 
 func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
@@ -98,15 +115,9 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 	r.consumerChs = append(r.consumerChs, ch)
 
 	// create queue
-	q, err := ch.QueueDeclare(
-		eventName,
-		true,
-		false,
-		false,
-		false,
-		queueArgs(eventName),
-	)
-	failOnError(err, "failed to declare a queue")
+	if err := declareQueue(ch, eventName); err != nil {
+		log.Printf("failed to declare queue: %v", err)
+	}
 
 	// set Qos
 	if err := ch.Qos(1, 0, false); err != nil {
@@ -115,13 +126,13 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 
 	// consume
 	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
+		eventName, // queue
+		"",        // consumer
+		false,     // auto-ack
+		false,     // exclusive
+		false,     // no-local
+		false,     // no-wait
+		nil,       // args
 	)
 	failOnError(err, "Failed to register a consumer")
 
