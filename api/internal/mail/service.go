@@ -63,16 +63,18 @@ Payment Status: %s
 			)
 		}
 
-		log.Info("Sending email...", zap.String("body", payload.Body))
-
 		// testing: fail send email
 		// if rand.Intn(3) == 0 {
 		// 	return errors.New("smtp failed")
 		// }
 		time.Sleep(10 * time.Second)
-		return errors.New("forced failure")
+		err := errors.New("forced failure")
+		log.Info("Email forced failure", zap.String("error_message", err.Error()))
+		return err
 
-		err := s.sendMail(ctx, payload)
+		log.Info("Sending email...", zap.String("body", payload.Body))
+
+		err = s.sendMail(ctx, payload)
 		if err != nil {
 			log.Error("Something wrong", zap.String("error", err.Error()))
 			return err
