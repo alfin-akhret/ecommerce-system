@@ -662,7 +662,7 @@ func (s *Service) processCallback(
 	s.broker.Publish(ctx, events.Event{
 		Name:    "payment.callback.processed",
 		Payload: payload,
-	})
+	}, 0)
 
 	payloadJson, _ := json.Marshal(payload)
 	log.Info(

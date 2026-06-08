@@ -130,7 +130,7 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 			},
 		}
 
-		w.broker.Publish(ctx, event)
+		w.broker.Publish(ctx, event, 0)
 
 		logger.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))
 	}

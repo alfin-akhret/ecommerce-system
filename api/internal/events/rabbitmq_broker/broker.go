@@ -31,11 +31,11 @@ func CreateNewBroker(connString string) *RabbitMQBroker {
 
 func failOnError(err error, msg string) {
 	if err != nil {
-		log.Panicf("%s: %s", msg, err)
+		log.Printf("%s: %s", msg, err)
 	}
 }
 
-func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
+func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryCount int) error {
 
 	// create main queue
 	q, err := r.publisherCh.QueueDeclare(
@@ -66,7 +66,12 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 	body, err := json.Marshal(event.Payload)
 	if err != nil {
 		log.Printf("Error parsing event payload: %v", err.Error())
-		return
+		return err
+	}
+
+	// set retry count on rabbitMQ header
+	headers := amqp.Table{
+		"x-retry-count": retryCount,
 	}
 	err = r.publisherCh.PublishWithContext(publishCtx,
 		"",     // exchange
@@ -77,9 +82,11 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event) {
 			ContentType:  "application/json",
 			Body:         body,
 			DeliveryMode: amqp.Persistent,
+			Headers:      headers,
 		})
 	failOnError(err, "Failed to publish a message")
 	log.Printf(" [x] Sent %v\n", body)
+	return err
 }
 
 func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
@@ -122,6 +129,21 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 		for d := range msgs {
 			log.Printf("Received a message: %s", d.Body)
 
+			retryCount := 0
+
+			if d.Headers != nil {
+				if v, ok := d.Headers["x-retry-count"]; ok {
+					switch val := v.(type) {
+					case int32:
+						retryCount = int(val)
+					case int64:
+						retryCount = int(val)
+					case int:
+						retryCount = val
+					}
+				}
+			}
+
 			event, err := decodeEvent(eventName, d.Body)
 			if err != nil {
 				if nackErr := d.Nack(false, false); nackErr != nil {
@@ -134,14 +156,21 @@ func (r *RabbitMQBroker) Subscribe(eventName string, handler events.Handler) {
 			ctx := context.Background()
 			err = handler(ctx, event)
 			if err != nil {
-				// jika handler error dan NACK berhasil, maka message akan masuk lagi ke queue
-				// dan akan di retry
-				if nackErr := d.Nack(false, false); nackErr != nil {
-					// jika NACK error, print log
-					log.Printf("Failed to NACK event: %v", nackErr.Error())
+				if retryCount > 3 {
+					if nackErr := d.Nack(false, false); nackErr != nil {
+						log.Printf("failed to NACK event: %v", nackErr)
+					}
+					continue
 				}
-				log.Printf("Handler failed: %v", err.Error())
-				continue
+
+				retryCount += 1
+
+				if err := r.Publish(ctx, event, retryCount); err != nil {
+					_ = d.Nack(false, true)
+					continue
+				}
+
+				_ = d.Ack(false)
 			}
 
 			if ackErr := d.Ack(false); ackErr != nil {
