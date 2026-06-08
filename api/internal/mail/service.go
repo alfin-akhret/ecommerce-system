@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -68,6 +69,7 @@ Payment Status: %s
 		// if rand.Intn(3) == 0 {
 		// 	return errors.New("smtp failed")
 		// }
+		time.Sleep(10 * time.Second)
 		return errors.New("forced failure")
 
 		err := s.sendMail(ctx, payload)

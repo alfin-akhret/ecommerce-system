@@ -138,7 +138,7 @@ func (r *RabbitMQBroker) Subscribe(eventName string, subscriberName string, hand
 
 	// consume
 	msgs, err := ch.Consume(
-		eventName, // queue
+		queueName, // queue
 		"",        // consumer
 		false,     // auto-ack
 		false,     // exclusive
