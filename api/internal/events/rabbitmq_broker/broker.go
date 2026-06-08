@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
@@ -15,6 +16,7 @@ type RabbitMQBroker struct {
 	publisherCh *amqp.Channel
 	consumerChs []*amqp.Channel
 
+	mu             sync.Mutex
 	declaredQueues map[string]bool
 }
 
@@ -33,22 +35,20 @@ func CreateNewBroker(connString string) *RabbitMQBroker {
 }
 
 func (r *RabbitMQBroker) ensureQueue(eventName string) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.declaredQueues[eventName] {
 		return nil
 	}
 
-	_, err := r.publisherCh.QueueDeclare(eventName, true, false, false, false, queueArgs(eventName))
-	if err != nil {
-		return err
-	}
-
-	_, err = r.publisherCh.QueueDeclare(eventName+".dlq", true, false, false, false, nil)
-	if err != nil {
+	if err := declareQueue(r.publisherCh, eventName); err != nil {
 		return err
 	}
 
 	r.declaredQueues[eventName] = true
 	return nil
+
 }
 
 func declareQueue(ch *amqp.Channel, eventName string) error {
