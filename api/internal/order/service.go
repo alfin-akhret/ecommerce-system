@@ -203,8 +203,8 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 }
 
 // subscribe to topic: "payment.expired"
-func (s *Service) SubscribeTo(topic string) {
-	s.broker.Subscribe(topic, "order-service", func(ctx context.Context, event events.Event) error {
+func (s *Service) SubscribeTo(ctx context.Context, topic string) {
+	s.broker.Subscribe(ctx, topic, "order-service", func(ctx context.Context, event events.Event) error {
 		payload := event.Payload.(events.PaymentExpiredPayload)
 		if err := s.CancelOrder(ctx, payload.OrderID); err != nil {
 			return err

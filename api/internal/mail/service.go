@@ -25,8 +25,8 @@ func NewService(broker events.Broker, cfg *EmailConfig) *Service {
 	}
 }
 
-func (s *Service) SubscribeTo(topic string) {
-	s.broker.Subscribe(topic, "mail-service", func(ctx context.Context, event events.Event) error {
+func (s *Service) SubscribeTo(ctx context.Context, topic string) {
+	s.broker.Subscribe(ctx, topic, "mail-service", func(ctx context.Context, event events.Event) error {
 		log := helper.LoggerFromCtx(ctx)
 
 		payload := EmailPayload{
