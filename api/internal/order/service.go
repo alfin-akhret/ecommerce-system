@@ -204,13 +204,16 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 
 // subscribe to topic: "payment.expired"
 func (s *Service) SubscribeTo(topic string) {
-	s.broker.Subscribe(topic, func(ctx context.Context, event events.Event) {
+	s.broker.Subscribe(topic, "order-service", func(ctx context.Context, event events.Event) error {
 		payload := event.Payload.(events.PaymentExpiredPayload)
-		s.CancelOrder(ctx, payload.OrderID)
+		if err := s.CancelOrder(ctx, payload.OrderID); err != nil {
+			return err
+		}
+		return nil
 	})
 }
 
-func (s *Service) CancelOrder(ctx context.Context, orderID string) {
+func (s *Service) CancelOrder(ctx context.Context, orderID string) error {
 	logger := helper.LoggerFromCtx(ctx)
 
 	tr := otel.Tracer("order.service")
@@ -227,7 +230,7 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 			zap.String("error_message", err.Error()),
 			zap.String("order_id", orderID),
 		)
-		return
+		return err
 	}
 	defer tx.Rollback(ctx)
 
@@ -238,7 +241,7 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 			zap.String("error_message", err.Error()),
 			zap.String("order_id", orderID),
 		)
-		return
+		return err
 	}
 
 	if err := s.ReleaseOrderStockWithTx(ctx, tx, orderID); err != nil {
@@ -248,7 +251,7 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 			zap.String("error_message", err.Error()),
 			zap.String("order_id", orderID),
 		)
-		return
+		return err
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -258,8 +261,10 @@ func (s *Service) CancelOrder(ctx context.Context, orderID string) {
 			zap.String("error_message", err.Error()),
 			zap.String("order_id", orderID),
 		)
-		return
+		return err
 	}
+
+	return nil
 
 }
 
@@ -535,7 +540,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 			OrderID: orderID.String(),
 			Email:   "testingemail@gmail.com",
 		},
-	})
+	}, 0)
 
 	return orderRespnse, nil
 

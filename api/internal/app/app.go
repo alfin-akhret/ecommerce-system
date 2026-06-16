@@ -1,15 +1,13 @@
 package app
 
 import (
-	"context"
-	"log"
 	"strconv"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
-	"github.com/alfin-akhret/ecommerce-system/internal/events"
+	rabbitmqbroker "github.com/alfin-akhret/ecommerce-system/internal/events/rabbitmq_broker"
 	"github.com/alfin-akhret/ecommerce-system/internal/mail"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
 	"github.com/alfin-akhret/ecommerce-system/internal/payment"
@@ -29,6 +27,7 @@ type App struct {
 	CartHandler                  *cart.Handler
 	PaymentExpirationWorker      *payment.PaymentExpirationWorker
 	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
+	Broker                       *rabbitmqbroker.RabbitMQBroker
 }
 
 func New() (*App, error) {
@@ -56,13 +55,18 @@ func New() (*App, error) {
 	cartService := cart.NewCartService(cartRepo, productService)
 	cartHandler := cart.NewHandler(cartService)
 
-	// in-memory message broker
-	broker := events.NewMemoryBroker()
-	// 2. analytic service
-	broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
-		payload := event.Payload.(events.OrderCreatedPayload)
-		log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
-	})
+	/*
+		// in-memory message broker
+		broker := events.NewMemoryBroker()
+		// 2. analytic service
+		broker.Subscribe("order.created", func(ctx context.Context, event events.Event) {
+			payload := event.Payload.(events.OrderCreatedPayload)
+			log.Printf("[Analytics] order_created order_id=%s", payload.OrderID)
+		})
+	*/
+
+	// rabbitMQ message broker
+	broker := rabbitmqbroker.CreateNewBroker(cfg.RabbitMQHost)
 
 	// email service
 	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
@@ -113,5 +117,6 @@ func New() (*App, error) {
 		CartHandler:                  cartHandler,
 		PaymentExpirationWorker:      expirationWorker,
 		IdempotencyKeyDeletionWorker: iKeyDeletWorker,
+		Broker:                       broker,
 	}, nil
 }

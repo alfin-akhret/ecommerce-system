@@ -172,6 +172,13 @@ func main() {
 		log.Printf("tracer shutdown error: %v", err)
 	}
 
+	// === 8.4 close rabbitMQ
+	if application.Broker != nil {
+		if err := application.Broker.Close(); err != nil {
+			log.Printf("RabbitMQ shutdown error: %v", err)
+		}
+	}
+
 }
 
 func PanicHandler(w http.ResponseWriter, r *http.Request) {
