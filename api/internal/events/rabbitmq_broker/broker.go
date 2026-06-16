@@ -163,7 +163,18 @@ func (r *RabbitMQBroker) Subscribe(eventName string, subscriberName string, hand
 			ctx := context.Background()
 
 			if err := handler(ctx, event); err != nil {
-				if retryCount >= 3 {
+				if retryCount >= maxRetry {
+					_ = d.Nack(false, false)
+					continue
+				}
+
+				delay := retryDelay(retryCount + 1)
+				log.Printf("handler failed, retrying events=%s retry=%d delay=%s err=%v",
+					event.Name, retryCount+1, delay, err)
+
+				select {
+				case <-time.After(delay):
+				case <-ctx.Done():
 					_ = d.Nack(false, false)
 					continue
 				}

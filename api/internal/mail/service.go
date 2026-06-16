@@ -2,9 +2,7 @@ package mail
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -67,14 +65,14 @@ Payment Status: %s
 		// if rand.Intn(3) == 0 {
 		// 	return errors.New("smtp failed")
 		// }
-		time.Sleep(10 * time.Second)
-		err := errors.New("forced failure")
-		log.Info("Email forced failure", zap.String("error_message", err.Error()))
-		return err
+		// time.Sleep(10 * time.Second)
+		// err := errors.New("forced failure")
+		// log.Info("Email forced failure", zap.String("error_message", err.Error()))
+		// return err
 
 		log.Info("Sending email...", zap.String("body", payload.Body))
 
-		err = s.sendMail(ctx, payload)
+		err := s.sendMail(ctx, payload)
 		if err != nil {
 			log.Error("Something wrong", zap.String("error", err.Error()))
 			return err

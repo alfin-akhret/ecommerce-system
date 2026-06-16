@@ -74,3 +74,22 @@ func queueArgs(eventName string) amqp.Table {
 		"x-dead-letter-routing-key": eventName + ".dlq",
 	}
 }
+
+const (
+	maxRetry        = 3
+	baseRetrayDelay = 1 * time.Second
+	maxRetryDelay   = 30 * time.Second
+)
+
+func retryDelay(retryCount int) time.Duration {
+	if retryCount < 1 {
+		return baseRetrayDelay
+	}
+
+	delay := baseRetrayDelay * time.Duration(1<<(retryCount-1))
+	if delay > maxRetryDelay {
+		return maxRetryDelay
+	}
+
+	return delay
+}
