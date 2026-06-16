@@ -92,7 +92,11 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 	return nil
 }
 
-func (r *RabbitMQBroker) Subscribe(eventName string, subscriberName string, handler events.Handler) {
+func (r *RabbitMQBroker) Subscribe(
+	ctx context.Context,
+	eventName string,
+	subscriberName string,
+	handler events.Handler) {
 
 	// open new channel for each subscriber
 	ch, err := r.conn.Channel()
@@ -160,8 +164,6 @@ func (r *RabbitMQBroker) Subscribe(eventName string, subscriberName string, hand
 				continue
 			}
 
-			ctx := context.Background()
-
 			if err := handler(ctx, event); err != nil {
 				if retryCount >= maxRetry {
 					_ = d.Nack(false, false)
@@ -176,7 +178,7 @@ func (r *RabbitMQBroker) Subscribe(eventName string, subscriberName string, hand
 				case <-time.After(delay):
 				case <-ctx.Done():
 					_ = d.Nack(false, false)
-					continue
+					return // context sudah cancel, consumer sebaiknya berhenti semua
 				}
 
 				if err := r.Publish(ctx, event, retryCount+1); err != nil {

@@ -20,8 +20,12 @@ import (
 )
 
 func main() {
+
+	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
 	// === 1. init main Application
-	application, err := app.New()
+	application, err := app.New(rootCtx)
 	if err != nil {
 		panic(err)
 	}
@@ -41,8 +45,6 @@ func main() {
 	// 1. dengerin signal (SIGINT, SIGTERM)
 	// 2. stop server
 	// 3. shutdown tracer (flush data)
-	rootCtx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
 	shutdown, err := helper.InitTracer(rootCtx,
 		application.Config.OTelServiceName,
 		application.Config.OTelExporterEndpoint,

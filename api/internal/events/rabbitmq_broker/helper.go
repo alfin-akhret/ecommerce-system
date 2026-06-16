@@ -76,17 +76,17 @@ func queueArgs(eventName string) amqp.Table {
 }
 
 const (
-	maxRetry        = 3
-	baseRetrayDelay = 1 * time.Second
-	maxRetryDelay   = 30 * time.Second
+	maxRetry       = 3
+	baseRetryDelay = 1 * time.Second
+	maxRetryDelay  = 30 * time.Second
 )
 
 func retryDelay(retryCount int) time.Duration {
 	if retryCount < 1 {
-		return baseRetrayDelay
+		return baseRetryDelay
 	}
 
-	delay := baseRetrayDelay * time.Duration(1<<(retryCount-1))
+	delay := baseRetryDelay * time.Duration(1<<(retryCount-1))
 	if delay > maxRetryDelay {
 		return maxRetryDelay
 	}

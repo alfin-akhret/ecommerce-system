@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"strconv"
 	"time"
 
@@ -30,7 +31,7 @@ type App struct {
 	Broker                       *rabbitmqbroker.RabbitMQBroker
 }
 
-func New() (*App, error) {
+func New(ctx context.Context) (*App, error) {
 	cfg := config.Load()
 
 	db, err := database.NewPostgres(cfg.DBUrl)
@@ -76,9 +77,9 @@ func New() (*App, error) {
 		DefaultSender: cfg.EmailDefaultSender,
 	}
 	emailService := mail.NewService(broker, mailConfig)
-	emailService.SubscribeTo("order.created")
-	emailService.SubscribeTo("payment.callback.processed")
-	emailService.SubscribeTo("payment.expired")
+	emailService.SubscribeTo(ctx, "order.created")
+	emailService.SubscribeTo(ctx, "payment.callback.processed")
+	emailService.SubscribeTo(ctx, "payment.expired")
 
 	// payment
 	paymentService := payment.NewService(db, broker)
@@ -86,7 +87,7 @@ func New() (*App, error) {
 	// order
 	// order service uses message-broker to broadcast message
 	orderService := order.NewService(db, productService, paymentService, cartService, broker)
-	orderService.SubscribeTo("payment.expired")
+	orderService.SubscribeTo(ctx, "payment.expired")
 	orderHandler := order.NewHandler(orderService)
 
 	paymentService.SetOrderStatusUpdater(orderService)
