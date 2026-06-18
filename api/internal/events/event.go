@@ -3,6 +3,7 @@ package events
 import "time"
 
 type Event struct {
+	ID        string
 	Name      string
 	Payload   any
 	CreatedAt time.Time

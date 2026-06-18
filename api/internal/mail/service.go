@@ -7,6 +7,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	mailClient "github.com/go-mail/mail/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -16,12 +17,15 @@ import (
 type Service struct {
 	broker events.Broker
 	cfg    *EmailConfig
+	repo   *Repository
 }
 
-func NewService(broker events.Broker, cfg *EmailConfig) *Service {
+func NewService(broker events.Broker, cfg *EmailConfig, db *pgxpool.Pool) *Service {
+	repo := NewEmailRepository(db)
 	return &Service{
 		broker: broker,
 		cfg:    cfg,
+		repo:   repo,
 	}
 }
 
@@ -61,15 +65,13 @@ Payment Status: %s
 			)
 		}
 
-		// testing: fail send email
-		// if rand.Intn(3) == 0 {
-		// 	return errors.New("smtp failed")
-		// }
-		// time.Sleep(10 * time.Second)
-		// err := errors.New("forced failure")
-		// log.Info("Email forced failure", zap.String("error_message", err.Error()))
-		// return err
+		// idempotency:
+		// 1. kalau message sudah pernah sukses diproses, skip dan ack
+		if s.repo.IsProcessed(ctx, event.ID) {
+			return nil
+		}
 
+		// 2. kirim email dulu
 		log.Info("Sending email...", zap.String("body", payload.Body))
 
 		err := s.sendMail(ctx, payload)
@@ -77,6 +79,23 @@ Payment Status: %s
 			log.Error("Something wrong", zap.String("error", err.Error()))
 			return err
 		}
+
+		// 3. Baru tandai processed setelah email sukses
+		err = s.repo.InsertProcessedMessage(ctx, event.ID)
+		if err != nil {
+			if IsDuplicateKeyError(err) {
+				log.Error("Duplicate event: Event has been processed before", zap.String("error", err.Error()))
+				return nil
+			}
+			return err
+		}
+
+		// kelemahan cara diatas adalah
+		// jika email sukses dikirim, lalu service crash sebelum InserProcessedMessage,
+		// maka event bisa retry dan akibatnya email akan terkirim dua kali
+		// ini hal biasa di sistem event driven disebut dg istilah
+		// "at least once + idempotent consumer"
+		// tapi ini masih ada solusinya. -> inbox pattern
 
 		return nil
 	})

@@ -81,6 +81,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 			Body:         body,
 			DeliveryMode: amqp.Persistent,
 			Timestamp:    time.Now(),
+			MessageId:    event.ID,
 			Headers: amqp.Table{
 				"x-retry-count": retryCount,
 			},
@@ -158,7 +159,7 @@ func (r *RabbitMQBroker) Subscribe(
 
 			retryCount := getRetryCount(d.Headers)
 
-			event, err := decodeEvent(eventName, d.Body)
+			event, err := decodeEvent(eventName, d.Body, d.MessageId)
 			if err != nil {
 				_ = d.Nack(false, false)
 				continue
