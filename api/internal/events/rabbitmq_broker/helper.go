@@ -9,8 +9,9 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func decodeEvent(eventName string, body []byte) (events.Event, error) {
+func decodeEvent(eventName string, body []byte, messageID string) (events.Event, error) {
 	event := events.Event{
+		ID:        messageID,
 		Name:      eventName,
 		CreatedAt: time.Now(),
 	}

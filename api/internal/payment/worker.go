@@ -8,6 +8,7 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
+	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
@@ -122,6 +123,7 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 		)
 
 		event := events.Event{
+			ID:   uuid.NewString(),
 			Name: "payment.expired",
 			Payload: events.PaymentExpiredPayload{
 				OrderID:   p.OrderID.String(),

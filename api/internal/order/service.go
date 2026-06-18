@@ -535,6 +535,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 
 	// publish event order.created
 	s.broker.Publish(ctx, events.Event{
+		ID:   uuid.NewString(),
 		Name: "order.created",
 		Payload: events.OrderCreatedPayload{
 			OrderID: orderID.String(),

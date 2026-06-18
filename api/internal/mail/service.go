@@ -7,6 +7,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 	mailClient "github.com/go-mail/mail/v2"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -16,12 +17,15 @@ import (
 type Service struct {
 	broker events.Broker
 	cfg    *EmailConfig
+	repo   *Repository
 }
 
-func NewService(broker events.Broker, cfg *EmailConfig) *Service {
+func NewService(broker events.Broker, cfg *EmailConfig, db *pgxpool.Pool) *Service {
+	repo := NewEmailRepository(db)
 	return &Service{
 		broker: broker,
 		cfg:    cfg,
+		repo:   repo,
 	}
 }
 
@@ -70,9 +74,19 @@ Payment Status: %s
 		// log.Info("Email forced failure", zap.String("error_message", err.Error()))
 		// return err
 
+		// idempotency:
+		// check apakah event sudah pernah diproses sebelumnya
+		err := s.repo.InsertProcessedMessage(ctx, event.ID)
+		if err != nil {
+			if IsDuplicateKeyError(err) {
+				log.Error("Duplicate event: Event has been processed before", zap.String("error", err.Error()))
+				return nil
+			}
+		}
+
 		log.Info("Sending email...", zap.String("body", payload.Body))
 
-		err := s.sendMail(ctx, payload)
+		err = s.sendMail(ctx, payload)
 		if err != nil {
 			log.Error("Something wrong", zap.String("error", err.Error()))
 			return err

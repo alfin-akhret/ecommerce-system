@@ -660,6 +660,7 @@ func (s *Service) processCallback(
 		Status:    nextStatus,
 	}
 	s.broker.Publish(ctx, events.Event{
+		ID:      uuid.NewString(),
 		Name:    "payment.callback.processed",
 		Payload: payload,
 	}, 0)
