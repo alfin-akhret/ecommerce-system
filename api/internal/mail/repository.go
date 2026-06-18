@@ -35,6 +35,19 @@ func (r *Repository) InsertProcessedMessage(ctx context.Context, eventID string)
 	return err
 }
 
+func (r *Repository) IsProcessed(ctx context.Context, eventID string) bool {
+	query := `
+		SELECT message_id
+		FROM processed_messages
+		WHERE message_id = $1
+	`
+
+	var messageID string
+	err := r.db.QueryRow(ctx, query, eventID).Scan(&messageID)
+	return err == nil
+
+}
+
 // duplicate error helper
 func IsDuplicateKeyError(err error) bool {
 	var pgErr *pgconn.PgError

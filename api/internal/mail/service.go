@@ -65,32 +65,37 @@ Payment Status: %s
 			)
 		}
 
-		// testing: fail send email
-		// if rand.Intn(3) == 0 {
-		// 	return errors.New("smtp failed")
-		// }
-		// time.Sleep(10 * time.Second)
-		// err := errors.New("forced failure")
-		// log.Info("Email forced failure", zap.String("error_message", err.Error()))
-		// return err
-
 		// idempotency:
-		// check apakah event sudah pernah diproses sebelumnya
-		err := s.repo.InsertProcessedMessage(ctx, event.ID)
+		// 1. kalau message sudah pernah sukses diproses, skip dan ack
+		if s.repo.IsProcessed(ctx, event.ID) {
+			return nil
+		}
+
+		// 2. kirim email dulu
+		log.Info("Sending email...", zap.String("body", payload.Body))
+
+		err := s.sendMail(ctx, payload)
+		if err != nil {
+			log.Error("Something wrong", zap.String("error", err.Error()))
+			return err
+		}
+
+		// 3. Baru tandai processed setelah email sukses
+		err = s.repo.InsertProcessedMessage(ctx, event.ID)
 		if err != nil {
 			if IsDuplicateKeyError(err) {
 				log.Error("Duplicate event: Event has been processed before", zap.String("error", err.Error()))
 				return nil
 			}
-		}
-
-		log.Info("Sending email...", zap.String("body", payload.Body))
-
-		err = s.sendMail(ctx, payload)
-		if err != nil {
-			log.Error("Something wrong", zap.String("error", err.Error()))
 			return err
 		}
+
+		// kelemahan cara diatas adalah
+		// jika email sukses dikirim, lalu service crash sebelum InserProcessedMessage,
+		// maka event bisa retry dan akibatnya email akan terkirim dua kali
+		// ini hal biasa di sistem event driven disebut dg istilah
+		// "at least once + idempotent consumer"
+		// tapi ini masih ada solusinya. -> inbox pattern
 
 		return nil
 	})
