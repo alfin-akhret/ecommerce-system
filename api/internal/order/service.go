@@ -516,9 +516,16 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		},
 	}
 
-	payload, err := json.Marshal(event)
+	payload, err := json.Marshal(event.Payload)
 	if err != nil {
 		// todo: need to be logged
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		log.Error("Order: Failed to json marshal event payload",
+			zap.String("user_id", userID),
+			zap.String("order_id", orderID.String()),
+			zap.String("error_message", err.Error()),
+		)
 		return nil, err
 	}
 	if err := s.repo.SaveOrderEvent(ctx, "order.created", payload); err != nil {

@@ -2,6 +2,7 @@ package events
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
@@ -13,6 +14,8 @@ const (
 	StatusPublished  = "PUBLISHED"
 	StatusFailed     = "FAILED"
 )
+
+var ErrOrderNotFound = errors.New("event not found")
 
 type Repository struct {
 	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
@@ -29,6 +32,43 @@ type OutboxEvent struct {
 
 func NewRepository(db database.DBTX) *Repository {
 	return &Repository{db: db}
+}
+
+func (r *Repository) UpdateOutboxEventsStatus(ctx context.Context, ids []string, status string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	query := ``
+
+	if status == StatusPublished {
+		query = `
+		UPDATE outbox
+		SET status = $1,
+		    published_at = NOW()
+		`
+	} else {
+		query = `
+		UPDATE outbox
+		SET status = $1
+		`
+	}
+
+	query += `
+	WHERE status = $2
+	AND id = ANY($3)
+	`
+
+	cmd, err := r.db.Exec(ctx, query, status, StatusProcessing, ids)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return ErrOrderNotFound
+	}
+
+	return nil
 }
 
 func (r *Repository) FindUnpublishedAndMarkProcessing(ctx context.Context, limit int) ([]OutboxEvent, error) {

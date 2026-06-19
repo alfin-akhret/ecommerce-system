@@ -8,6 +8,7 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/auth"
 	"github.com/alfin-akhret/ecommerce-system/internal/cart"
 	"github.com/alfin-akhret/ecommerce-system/internal/config"
+	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	rabbitmqbroker "github.com/alfin-akhret/ecommerce-system/internal/events/rabbitmq_broker"
 	"github.com/alfin-akhret/ecommerce-system/internal/mail"
 	"github.com/alfin-akhret/ecommerce-system/internal/order"
@@ -29,6 +30,7 @@ type App struct {
 	PaymentExpirationWorker      *payment.PaymentExpirationWorker
 	IdempotencyKeyDeletionWorker *order.IdempotencyKeyDeleteWorker
 	Broker                       *rabbitmqbroker.RabbitMQBroker
+	EventPublisherWorker         *events.EventPublisherWorker
 }
 
 func New(ctx context.Context) (*App, error) {
@@ -68,6 +70,16 @@ func New(ctx context.Context) (*App, error) {
 
 	// rabbitMQ message broker
 	broker := rabbitmqbroker.CreateNewBroker(cfg.RabbitMQHost)
+
+	// event service
+	eventService := events.NewService(db)
+	// event publisher worker
+	eventPublisherWorker := events.NewEventPublisherWorker(
+		eventService,
+		broker,
+		10*time.Second,
+		100,
+	)
 
 	// email service
 	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
@@ -119,5 +131,6 @@ func New(ctx context.Context) (*App, error) {
 		PaymentExpirationWorker:      expirationWorker,
 		IdempotencyKeyDeletionWorker: iKeyDeletWorker,
 		Broker:                       broker,
+		EventPublisherWorker:         eventPublisherWorker,
 	}, nil
 }

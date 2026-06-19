@@ -14,6 +14,7 @@ import (
 
 type EventService interface {
 	GetUnpublishedEvents(ctx context.Context, limit int) ([]Event, error) // todo: implement this
+	UpdateOutboxEventsStatus(ctx context.Context, ids []string, status string) error
 }
 
 type EventPublisherWorker struct {
@@ -108,6 +109,8 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 		attribute.Int("batch.size", len(events)),
 	)
 
+	var publishedEventsID []string
+	var failedPublishEventID []string
 	for _, ev := range events {
 		// child span
 		ctx, childSpan := tr.Start(ctx, "event.publisher.process")
@@ -116,8 +119,31 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 			attribute.String("event_id", ev.ID),
 		)
 
-		w.broker.Publish(ctx, ev, 0)
+		err := w.broker.Publish(ctx, ev, 0)
+		if err != nil {
+			failedPublishEventID = append(failedPublishEventID, ev.ID)
+			continue
+		}
 
-		logger.Info("[Event Publisher Worker] event published for payment", zap.String("payment_id", p.ID.String()))
+		publishedEventsID = append(publishedEventsID, ev.ID)
+
+		logger.Info("[Event Publisher Worker] event published for payment", zap.String("payment_id", ev.ID))
 	}
+
+	// update failed events status
+	if len(failedPublishEventID) > 0 {
+		err = w.service.UpdateOutboxEventsStatus(ctx, failedPublishEventID, StatusFailed)
+		if err != nil {
+			logger.Error("[Event Publisher Worker] failed to update failed event statuses", zap.Error(err))
+		}
+	}
+
+	// update published events status
+	if len(publishedEventsID) > 0 {
+		err = w.service.UpdateOutboxEventsStatus(ctx, publishedEventsID, StatusPublished)
+		if err != nil {
+			logger.Error("[Event Publisher Worker] failed to update published event statuses", zap.Error(err))
+		}
+	}
+
 }

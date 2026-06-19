@@ -161,6 +161,8 @@ func (r *RabbitMQBroker) Subscribe(
 
 			event, err := decodeEvent(eventName, d.Body, d.MessageId)
 			if err != nil {
+				log.Printf("failed decoding event, retrying events=%s retry=%d, err=%v",
+					event.Name, retryCount+1, err)
 				_ = d.Nack(false, false)
 				continue
 			}
