@@ -137,6 +137,7 @@ func main() {
 
 	application.PaymentExpirationWorker.Start(ctx)
 	application.IdempotencyKeyDeletionWorker.Start(ctx)
+	application.EventPublisherWorker.Start(ctx)
 
 	// === 7. Run HTTP server
 	// jalankan di go routine

@@ -506,6 +506,39 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		return nil, err
 	}
 
+	// save event order.created
+	event := events.Event{
+		ID:   uuid.NewString(),
+		Name: "order.created",
+		Payload: events.OrderCreatedPayload{
+			OrderID: orderID.String(),
+			Email:   "testingemail@gmail.com",
+		},
+	}
+
+	payload, err := json.Marshal(event.Payload)
+	if err != nil {
+		// todo: need to be logged
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		log.Error("Order: Failed to json marshal event payload",
+			zap.String("user_id", userID),
+			zap.String("order_id", orderID.String()),
+			zap.String("error_message", err.Error()),
+		)
+		return nil, err
+	}
+	if err := s.repo.SaveOrderEvent(ctx, "order.created", payload); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		log.Error("Order: Failed to save order.created event to outbox",
+			zap.String("user_id", userID),
+			zap.String("order_id", orderID.String()),
+			zap.String("error_message", err.Error()),
+		)
+		return nil, err
+	}
+
 	// commit transaction
 	if err := tx.Commit(ctx); err != nil {
 		log.Error("Order: Failed to commit transaction",
@@ -532,16 +565,6 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		)
 		return nil, err
 	}
-
-	// publish event order.created
-	s.broker.Publish(ctx, events.Event{
-		ID:   uuid.NewString(),
-		Name: "order.created",
-		Payload: events.OrderCreatedPayload{
-			OrderID: orderID.String(),
-			Email:   "testingemail@gmail.com",
-		},
-	}, 0)
 
 	return orderRespnse, nil
 

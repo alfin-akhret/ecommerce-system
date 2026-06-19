@@ -266,3 +266,22 @@ func (r *Repository) SaveIdempotencyKey(ctx context.Context,
 
 	return err
 }
+
+func (r *Repository) SaveOrderEvent(ctx context.Context, eventType string, payload []byte) error {
+	query := `
+	INSERT INTO outbox (id, event_type, payload, created_at)
+	VALUES ($1, $2, $3, $4)
+	`
+
+	id := uuid.New()
+	now := time.Now().UTC()
+
+	_, err := r.db.Exec(ctx, query,
+		id,
+		eventType,
+		payload,
+		now,
+	)
+
+	return err
+}
