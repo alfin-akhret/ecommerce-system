@@ -13,7 +13,7 @@ import (
 )
 
 type EventService interface {
-	GetUnpublishedEvents(ctx context.Context) ([]Event, error) // todo: implement this
+	GetUnpublishedEvents(ctx context.Context, limit int) ([]Event, error) // todo: implement this
 }
 
 type EventPublisherWorker struct {
@@ -86,7 +86,7 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 	logger := helper.LoggerFromCtx(ctx)
 	logger.Info("[Event Publisher Worker] running publishing job...")
 
-	events, err := w.service.GetUnpublishedEvents(ctx)
+	events, err := w.service.GetUnpublishedEvents(ctx, 100)
 	if err != nil {
 		logger.Error("[Event Publisher Worker] failed to get unpublished events: ", zap.Error(err))
 		return
