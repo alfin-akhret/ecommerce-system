@@ -704,7 +704,7 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 
 	paymentRepo := s.repo.WithTx(tx)
 
-	expiredPayments, err := s.repo.ExpirePayments(ctx)
+	expiredPayments, err := paymentRepo.ExpirePayments(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -731,7 +731,7 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 			log.Error("Payment: Failed to save expire payment to outbox",
 				zap.String("payment_id", p.ID.String()),
 				zap.Error(err))
-			continue
+			return nil, err
 		}
 
 		if err := paymentRepo.SavePaymentEvent(ctx, "payment.expired", payload); err != nil {
@@ -739,6 +739,7 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 				zap.String("order_id", p.OrderID.String()),
 				zap.String("error_message", err.Error()),
 			)
+			return nil, err
 		}
 
 		log.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))

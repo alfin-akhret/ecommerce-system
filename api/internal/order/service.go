@@ -488,7 +488,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	if err := s.repo.SaveIdempotencyKey(ctx,
+	if err := repo.SaveIdempotencyKey(ctx,
 		iKey,
 		uid,
 		orderID,
