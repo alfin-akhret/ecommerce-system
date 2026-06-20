@@ -635,6 +635,41 @@ func (s *Service) processCallback(
 		}
 	}
 
+	// save payment.callback.processed event to outbox
+	event := events.Event{
+		ID:   uuid.NewString(),
+		Name: "payment.callback.processed",
+		Payload: events.PaymentCallbackProcessedPayload{
+			OrderID:   payment.OrderID.String(),
+			PaymentID: paymentID,
+			Status:    nextStatus,
+		},
+	}
+
+	payload, err := json.Marshal(event.Payload)
+	if err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		log.Error(
+			"Payment: Published event: payment.callback.processed",
+			lPaymentID,
+			zap.String("order_id", payment.OrderID.String()),
+			lNextStatus,
+			zap.String("event payload", string(payload)),
+			zap.String("error_message", err.Error()),
+		)
+	}
+
+	if err := s.repo.SavePaymentEvent(ctx, "payment.callback.processed", payload); err != nil {
+		span.RecordError(err)
+		span.SetStatus(codes.Error, err.Error())
+		log.Error("Payment: Failed to save payment.callback.processed event to outbox",
+			zap.String("order_id", payment.OrderID.String()),
+			zap.String("error_message", err.Error()),
+		)
+		return err
+	}
+
 	if err := tx.Commit(ctx); err != nil {
 		log.Error(
 			"Payment: Failed to commit callback transaction",
@@ -651,27 +686,6 @@ func (s *Service) processCallback(
 		lPaymentID,
 		zap.String("order_id", payment.OrderID.String()),
 		lNextStatus,
-	)
-
-	// publish event, payment event failed or success
-	payload := events.PaymentCallbackProcessedPayload{
-		OrderID:   payment.OrderID.String(),
-		PaymentID: paymentID,
-		Status:    nextStatus,
-	}
-	s.broker.Publish(ctx, events.Event{
-		ID:      uuid.NewString(),
-		Name:    "payment.callback.processed",
-		Payload: payload,
-	}, 0)
-
-	payloadJson, _ := json.Marshal(payload)
-	log.Info(
-		"Payment: Published event: payment.callback.processed",
-		lPaymentID,
-		zap.String("order_id", payment.OrderID.String()),
-		lNextStatus,
-		zap.String("event payload", string(payloadJson)),
 	)
 
 	return nil

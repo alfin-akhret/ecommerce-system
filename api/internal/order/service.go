@@ -528,6 +528,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		)
 		return nil, err
 	}
+
 	if err := s.repo.SaveOrderEvent(ctx, "order.created", payload); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
