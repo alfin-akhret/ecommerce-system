@@ -529,7 +529,7 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	if err := s.repo.SaveOrderEvent(ctx, "order.created", payload); err != nil {
+	if err := repo.SaveOrderEvent(ctx, "order.created", payload); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to save order.created event to outbox",

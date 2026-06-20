@@ -660,7 +660,7 @@ func (s *Service) processCallback(
 		)
 	}
 
-	if err := s.SavePaymentEvent(ctx, "payment.callback.processed", payload); err != nil {
+	if err := paymentRepo.SavePaymentEvent(ctx, "payment.callback.processed", payload); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to save payment.callback.processed event to outbox",
