@@ -2,17 +2,12 @@ package payment
 
 import (
 	"context"
-	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
-	"github.com/google/uuid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
@@ -107,57 +102,4 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 	logger.Info("[Payment Worker]", zap.String("payment expired", strconv.Itoa(len(payments))))
 
-	// tracing
-	// root span
-	tr := otel.Tracer("payment-expiration-worker")
-	ctx, span := tr.Start(ctx, "payment.expiration.worker.run")
-	defer span.End()
-	span.SetAttributes(
-		attribute.Int("batch.size", len(payments)),
-	)
-
-	for _, p := range payments {
-		// child span
-		ctx, childSpan := tr.Start(ctx, "payment.expire.process")
-		defer childSpan.End()
-		childSpan.SetAttributes(
-			attribute.String("payment_id", p.ID.String()),
-			attribute.String("order_id", p.OrderID.String()),
-		)
-
-		// save payment.expired event to outbox
-		event := events.Event{
-			ID:   uuid.NewString(),
-			Name: "payment.expired",
-			Payload: events.PaymentExpiredPayload{
-				OrderID:   p.OrderID.String(),
-				PaymentID: p.ID.String(),
-				Email:     "testingemail@gmail.com",
-			},
-		}
-
-		payload, err := json.Marshal(event.Payload)
-		if err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			logger.Error(
-				"Payment: Error marshaling payment.expired payload",
-				zap.String("payment_id", p.ID.String()),
-				zap.String("order_id", p.OrderID.String()),
-				zap.String("event payload", string(payload)),
-				zap.String("error_message", err.Error()),
-			)
-		}
-
-		if err := w.service.SavePaymentEvent(ctx, "payment.expired", payload); err != nil {
-			span.RecordError(err)
-			span.SetStatus(codes.Error, err.Error())
-			logger.Error("Payment: Failed to save payment.expired event to outbox",
-				zap.String("order_id", p.OrderID.String()),
-				zap.String("error_message", err.Error()),
-			)
-		}
-
-		logger.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))
-	}
 }
