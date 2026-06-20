@@ -660,7 +660,7 @@ func (s *Service) processCallback(
 		)
 	}
 
-	if err := s.repo.SavePaymentEvent(ctx, "payment.callback.processed", payload); err != nil {
+	if err := s.SavePaymentEvent(ctx, "payment.callback.processed", payload); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to save payment.callback.processed event to outbox",
@@ -697,6 +697,11 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 		return nil, err
 	}
 	return expiredPayments, nil
+}
+
+func (s *Service) SavePaymentEvent(ctx context.Context, eventName string, payload []byte) error {
+	err := s.repo.SavePaymentEvent(ctx, eventName, payload)
+	return err
 }
 
 func (s *Service) AddPaymentRecon(ctx context.Context, req PaymentCallbackRequest) error {

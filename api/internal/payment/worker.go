@@ -2,6 +2,7 @@ package payment
 
 import (
 	"context"
+	"encoding/json"
 	"strconv"
 	"sync"
 	"time"
@@ -11,11 +12,13 @@ import (
 	"github.com/google/uuid"
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/codes"
 	"go.uber.org/zap"
 )
 
 type PaymentService interface {
 	ExpirePayments(ctx context.Context) ([]ExpiredPayment, error)
+	SavePaymentEvent(ctx context.Context, eventName string, payload []byte) error
 }
 type EventPublisher interface {
 	Publish(ctx context.Context, topic string, payload any) error
@@ -122,6 +125,7 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 			attribute.String("order_id", p.OrderID.String()),
 		)
 
+		// save payment.expired event to outbox
 		event := events.Event{
 			ID:   uuid.NewString(),
 			Name: "payment.expired",
@@ -132,7 +136,27 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 			},
 		}
 
-		w.broker.Publish(ctx, event, 0)
+		payload, err := json.Marshal(event.Payload)
+		if err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			logger.Error(
+				"Payment: Error marshaling payment.expired payload",
+				zap.String("payment_id", p.ID.String()),
+				zap.String("order_id", p.OrderID.String()),
+				zap.String("event payload", string(payload)),
+				zap.String("error_message", err.Error()),
+			)
+		}
+
+		if err := w.service.SavePaymentEvent(ctx, "payment.expired", payload); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, err.Error())
+			logger.Error("Payment: Failed to save payment.expired event to outbox",
+				zap.String("order_id", p.OrderID.String()),
+				zap.String("error_message", err.Error()),
+			)
+		}
 
 		logger.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))
 	}
