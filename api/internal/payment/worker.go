@@ -8,14 +8,12 @@ import (
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
-	"github.com/google/uuid"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
 	"go.uber.org/zap"
 )
 
 type PaymentService interface {
 	ExpirePayments(ctx context.Context) ([]ExpiredPayment, error)
+	SavePaymentEvent(ctx context.Context, eventName string, payload []byte) error
 }
 type EventPublisher interface {
 	Publish(ctx context.Context, topic string, payload any) error
@@ -104,36 +102,4 @@ func (w *PaymentExpirationWorker) run(ctx context.Context) {
 
 	logger.Info("[Payment Worker]", zap.String("payment expired", strconv.Itoa(len(payments))))
 
-	// tracing
-	// root span
-	tr := otel.Tracer("payment-expiration-worker")
-	ctx, span := tr.Start(ctx, "payment.expiration.worker.run")
-	defer span.End()
-	span.SetAttributes(
-		attribute.Int("batch.size", len(payments)),
-	)
-
-	for _, p := range payments {
-		// child span
-		ctx, childSpan := tr.Start(ctx, "payment.expire.process")
-		defer childSpan.End()
-		childSpan.SetAttributes(
-			attribute.String("payment_id", p.ID.String()),
-			attribute.String("order_id", p.OrderID.String()),
-		)
-
-		event := events.Event{
-			ID:   uuid.NewString(),
-			Name: "payment.expired",
-			Payload: events.PaymentExpiredPayload{
-				OrderID:   p.OrderID.String(),
-				PaymentID: p.ID.String(),
-				Email:     "testingemail@gmail.com",
-			},
-		}
-
-		w.broker.Publish(ctx, event, 0)
-
-		logger.Info("[Payment Worker] event published for payment", zap.String("payment_id", p.ID.String()))
-	}
 }

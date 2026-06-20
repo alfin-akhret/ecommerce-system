@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -256,4 +257,23 @@ func (r *Repository) AddPaymentRecon(ctx context.Context, data *ReconData) error
 	}
 
 	return nil
+}
+
+func (r *Repository) SavePaymentEvent(ctx context.Context, eventType string, payload []byte) error {
+	query := `
+	INSERT INTO outbox (id, event_type, payload, created_at)
+	VALUES ($1, $2, $3, $4)
+	`
+
+	id := uuid.New()
+	now := time.Now().UTC()
+
+	_, err := r.db.Exec(ctx, query,
+		id,
+		eventType,
+		payload,
+		now,
+	)
+
+	return err
 }
