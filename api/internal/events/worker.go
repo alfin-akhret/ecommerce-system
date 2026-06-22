@@ -13,16 +13,21 @@ import (
 )
 
 type EventService interface {
-	GetUnpublishedEvents(ctx context.Context, limit int) ([]Event, error) // todo: implement this
+	GetUnpublishedEvents(ctx context.Context, limit int, lockedBy string, leaseTimeout time.Duration) ([]Event, error) // todo: implement this
 	UpdateOutboxEventsStatus(ctx context.Context, ids []string, status string) error
+	MarkPublished(ctx context.Context, publishedIds []string) error
+	MarkPublishFailed(ctx context.Context, eventID string, errString string, maxRetry int, backoff time.Duration) error
 }
 
 type EventPublisherWorker struct {
 	service EventService
 	broker  Broker
 
-	interval  time.Duration
-	batchSize int
+	interval     time.Duration // interval ticker workernya
+	batchSize    int
+	lockedBy     string
+	leaseTimeout time.Duration // interval exponential backoff utk retry publish
+	maxRetry     int
 
 	wg     sync.WaitGroup
 	cancel context.CancelFunc
@@ -33,12 +38,18 @@ func NewEventPublisherWorker(
 	broker Broker,
 	interval time.Duration,
 	batchSize int,
+	lockedBy string,
+	leaseTimeout time.Duration,
+	maxRetry int,
 ) *EventPublisherWorker {
 	return &EventPublisherWorker{
-		service:   service,
-		broker:    broker,
-		interval:  interval,
-		batchSize: batchSize,
+		service:      service,
+		broker:       broker,
+		interval:     interval,
+		batchSize:    batchSize,
+		lockedBy:     lockedBy,
+		leaseTimeout: leaseTimeout,
+		maxRetry:     maxRetry,
 	}
 }
 
@@ -87,7 +98,12 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 	logger := helper.LoggerFromCtx(ctx)
 	logger.Info("[Event Publisher Worker] running publishing job...")
 
-	events, err := w.service.GetUnpublishedEvents(ctx, 100)
+	events, err := w.service.GetUnpublishedEvents(
+		ctx,
+		w.batchSize,
+		w.lockedBy,
+		w.leaseTimeout,
+	)
 	if err != nil {
 		logger.Error("[Event Publisher Worker] failed to get unpublished events: ", zap.Error(err))
 		return
@@ -109,8 +125,7 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 		attribute.Int("batch.size", len(events)),
 	)
 
-	var publishedEventsID []string
-	var failedPublishEventID []string
+	var publishedIDs []string
 	for _, ev := range events {
 		// child span
 		ctx, childSpan := tr.Start(ctx, "event.publisher.process")
@@ -121,29 +136,36 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 
 		err := w.broker.Publish(ctx, ev, 0)
 		if err != nil {
-			failedPublishEventID = append(failedPublishEventID, ev.ID)
+			backoff := calculateBackoff(ev.RetryCount)
+			_ = w.service.MarkPublishFailed(
+				ctx,
+				ev.ID,
+				err.Error(),
+				w.maxRetry,
+				backoff,
+			)
 			continue
 		}
 
-		publishedEventsID = append(publishedEventsID, ev.ID)
+		publishedIDs = append(publishedIDs, ev.ID)
 
-		logger.Info("[Event Publisher Worker] event published for payment", zap.String("payment_id", ev.ID))
+		//logger.Info("[Event Publisher Worker] event published for payment", zap.String("payment_id", ev.ID))
 	}
 
-	// update failed events status
-	if len(failedPublishEventID) > 0 {
-		err = w.service.UpdateOutboxEventsStatus(ctx, failedPublishEventID, StatusFailed)
-		if err != nil {
-			logger.Error("[Event Publisher Worker] failed to update failed event statuses", zap.Error(err))
-		}
+	if len(publishedIDs) > 0 {
+		_ = w.service.MarkPublished(ctx, publishedIDs)
 	}
 
-	// update published events status
-	if len(publishedEventsID) > 0 {
-		err = w.service.UpdateOutboxEventsStatus(ctx, publishedEventsID, StatusPublished)
-		if err != nil {
-			logger.Error("[Event Publisher Worker] failed to update published event statuses", zap.Error(err))
-		}
+}
+
+func calculateBackoff(retryCount int) time.Duration {
+	base := time.Second
+	delay := time.Duration(1<<retryCount) * base
+
+	maxDelay := time.Minute
+	if delay > maxDelay {
+		return maxDelay
 	}
 
+	return delay
 }

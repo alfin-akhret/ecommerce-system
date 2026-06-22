@@ -2,6 +2,8 @@ package app
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strconv"
 	"time"
 
@@ -74,11 +76,16 @@ func New(ctx context.Context) (*App, error) {
 	// event service
 	eventService := events.NewService(db)
 	// event publisher worker
+	hostname, _ := os.Hostname()
+	lockedBy := fmt.Sprintf("%s:%d", hostname, os.Getpid())
 	eventPublisherWorker := events.NewEventPublisherWorker(
 		eventService,
 		broker,
 		10*time.Second,
 		100,
+		lockedBy,
+		5*time.Second,
+		3,
 	)
 
 	// email service
