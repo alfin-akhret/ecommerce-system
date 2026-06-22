@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -26,9 +27,9 @@ func (s *Service) UpdateOutboxEventsStatus(ctx context.Context, ids []string, st
 	return nil
 }
 
-func (s *Service) GetUnpublishedEvents(ctx context.Context, limit int) ([]Event, error) {
+func (s *Service) GetUnpublishedEvents(ctx context.Context, limit int, lockedBy string, leaseTimeout time.Duration) ([]Event, error) {
 	// get events from DB
-	outboxEvents, err := s.repository.FindUnpublishedAndMarkProcessing(ctx, limit)
+	outboxEvents, err := s.repository.FindUnpublishedAndMarkProcessing(ctx, limit, lockedBy, leaseTimeout)
 	if err != nil {
 		return nil, err
 	}
@@ -42,10 +43,11 @@ func (s *Service) GetUnpublishedEvents(ctx context.Context, limit int) ([]Event,
 		}
 
 		event := Event{
-			ID:        outEvnt.ID,
-			Name:      outEvnt.EventType,
-			Payload:   payload,
-			CreatedAt: outEvnt.CreatedAt,
+			ID:         outEvnt.ID,
+			Name:       outEvnt.EventType,
+			Payload:    payload,
+			CreatedAt:  outEvnt.CreatedAt,
+			RetryCount: outEvnt.RetryCount,
 		}
 
 		events = append(events, event)
@@ -80,4 +82,14 @@ func decodeOutboxPayload(eventType string, rawPayload []byte) (any, error) {
 	default:
 		return nil, fmt.Errorf("unknown event type: %s", eventType)
 	}
+}
+
+func (s *Service) MarkPublished(ctx context.Context, publishedIds []string) error {
+	// not implemented yet
+	return nil
+}
+
+func (s *Service) MarkPublishFailed(ctx context.Context, eventID string, errString string, maxRetry int, backoff time.Duration) error {
+	// not implemented yet,
+	return nil
 }
