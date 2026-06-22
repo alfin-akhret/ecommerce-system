@@ -85,11 +85,11 @@ func decodeOutboxPayload(eventType string, rawPayload []byte) (any, error) {
 }
 
 func (s *Service) MarkPublished(ctx context.Context, publishedIds []string) error {
-	// not implemented yet
-	return nil
+	err := s.repository.MarkPublished(ctx, publishedIds)
+	return err
 }
 
 func (s *Service) MarkPublishFailed(ctx context.Context, eventID string, errString string, maxRetry int, backoff time.Duration) error {
-	// not implemented yet,
-	return nil
+	err := s.repository.MarkPublishFailed(ctx, eventID, errString, maxRetry, backoff)
+	return err
 }

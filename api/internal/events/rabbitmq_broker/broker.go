@@ -87,7 +87,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 			},
 		})
 	if err != nil {
-		log.Printf(" [x] Sent %v\n", body)
+		log.Printf("{ERROR} %s\n", err.Error())
 		return err
 	}
 	return nil
