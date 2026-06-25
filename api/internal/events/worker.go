@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -98,6 +99,12 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 	logger := helper.LoggerFromCtx(ctx)
 	logger.Info("[Event Publisher Worker] running publishing job...")
 
+	// tracing
+	// root span
+	tr := otel.Tracer("event-publisher-worker")
+	ctx, span := tr.Start(ctx, "event.publisher.worker.run")
+	defer span.End()
+
 	events, err := w.service.GetUnpublishedEvents(
 		ctx,
 		w.batchSize,
@@ -114,46 +121,75 @@ func (w *EventPublisherWorker) run(ctx context.Context) {
 		return
 	}
 
-	logger.Info("[Event Publisher Worker]", zap.String("events published", strconv.Itoa(len(events))))
-
-	// tracing
-	// root span
-	tr := otel.Tracer("event-publisher-worker")
-	ctx, span := tr.Start(ctx, "event.publisher.worker.run")
-	defer span.End()
 	span.SetAttributes(
 		attribute.Int("batch.size", len(events)),
 	)
+	logger.Info("[Event Publisher Worker]", zap.String("events published", strconv.Itoa(len(events))))
 
 	var publishedIDs []string
 	for _, ev := range events {
 		// child span
-		ctx, childSpan := tr.Start(ctx, "event.publisher.process")
-		defer childSpan.End()
+		eventCtx, childSpan := tr.Start(ctx, "event.publisher.process")
 		childSpan.SetAttributes(
 			attribute.String("event_id", ev.ID),
 		)
 
-		err := w.broker.Publish(ctx, ev, 0)
+		err, ack := w.broker.Publish(eventCtx, ev, 0)
 		if err != nil {
+			childSpan.RecordError(err)
 			backoff := calculateBackoff(ev.RetryCount)
-			_ = w.service.MarkPublishFailed(
-				ctx,
+			if publishErr := w.service.MarkPublishFailed(
+				eventCtx,
 				ev.ID,
 				err.Error(),
 				w.maxRetry,
 				backoff,
-			)
+			); publishErr != nil {
+				logger.Error(
+					"failed to mark publish failed",
+					zap.Error(publishErr),
+				)
+			}
+			childSpan.End()
 			continue
 		}
 
-		publishedIDs = append(publishedIDs, ev.ID)
+		switch strings.ToUpper(ack) {
+		case "ACK":
+			publishedIDs = append(publishedIDs, ev.ID)
+		case "NACK":
+			backoff := calculateBackoff(ev.RetryCount)
+			if publishErr := w.service.MarkPublishFailed(
+				eventCtx,
+				ev.ID,
+				"publisher confirm return NACK",
+				w.maxRetry,
+				backoff,
+			); publishErr != nil {
+				logger.Error(
+					"failed to mark publish failed",
+					zap.Error(publishErr),
+				)
+			}
+		default:
+			logger.Warn(
+				"unknown publisher confirm status",
+				zap.String("ack", ack),
+				zap.String("event_id", ev.ID),
+			)
+		}
 
+		childSpan.End()
 		//logger.Info("[Event Publisher Worker] event published for payment", zap.String("payment_id", ev.ID))
 	}
 
 	if len(publishedIDs) > 0 {
-		_ = w.service.MarkPublished(ctx, publishedIDs)
+		if err := w.service.MarkPublished(ctx, publishedIDs); err != nil {
+			logger.Error(
+				"failed to mark published events",
+				zap.Error(err),
+			)
+		}
 	}
 
 }

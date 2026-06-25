@@ -3,6 +3,7 @@ package rabbitmqbroker
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"log"
 	"sync"
 	"time"
@@ -16,9 +17,11 @@ const eventExchange = "ecommerce.events"
 type RabbitMQBroker struct {
 	conn        *amqp.Connection
 	publisherCh *amqp.Channel
+	confirmCh   chan amqp.Confirmation
 	consumerChs []*amqp.Channel
 
-	mu sync.Mutex
+	publishMu sync.Mutex
+	mu        sync.Mutex
 }
 
 func CreateNewBroker(connString string) *RabbitMQBroker {
@@ -28,9 +31,20 @@ func CreateNewBroker(connString string) *RabbitMQBroker {
 	pubCh, err := conn.Channel()
 	failOnError(err, "Failed to open channel")
 
+	// aktifkan Publisher confirm mode
+	if err := pubCh.Confirm(false); err != nil {
+		failOnError(err, "failed to enable publisher confirm")
+	}
+
+	// inisialisasi confirmation channel
+	confirmCh := pubCh.NotifyPublish(
+		make(chan amqp.Confirmation, 1),
+	)
+
 	b := &RabbitMQBroker{
 		conn:        conn,
 		publisherCh: pubCh,
+		confirmCh:   confirmCh,
 	}
 
 	if err := b.declareExchange(pubCh); err != nil {
@@ -58,13 +72,16 @@ func failOnError(err error, msg string) {
 	}
 }
 
-func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryCount int) error {
+func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryCount int) (error, string) {
+	// biar ga race condition antar goroutine
+	r.publishMu.Lock()
+	defer r.publishMu.Unlock()
 
 	// publish
 	body, err := json.Marshal(event.Payload)
 	if err != nil {
 		log.Printf("Error parsing event payload: %v", err.Error())
-		return err
+		return err, ""
 	}
 
 	publishCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
@@ -88,9 +105,22 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 		})
 	if err != nil {
 		log.Printf("{ERROR} %s\n", err.Error())
-		return err
+		return err, ""
 	}
-	return nil
+
+	select {
+	case confirm, ok := <-r.confirmCh:
+		if !ok {
+			return errors.New("publisher confirm channel closed"), ""
+		}
+		if confirm.Ack {
+			return nil, "ACK"
+		}
+		return nil, "NACK"
+
+	case <-time.After(5 * time.Second):
+		return errors.New("publisher confirm timeout..."), ""
+	}
 }
 
 func (r *RabbitMQBroker) Subscribe(
@@ -184,7 +214,7 @@ func (r *RabbitMQBroker) Subscribe(
 					return // context sudah cancel, consumer sebaiknya berhenti semua
 				}
 
-				if err := r.Publish(ctx, event, retryCount+1); err != nil {
+				if err, _ := r.Publish(ctx, event, retryCount+1); err != nil {
 					_ = d.Nack(false, false)
 					continue
 				}
