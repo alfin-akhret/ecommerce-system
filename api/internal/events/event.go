@@ -1,14 +1,17 @@
 package events
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Event struct {
-	ID         string
-	Name       string
-	Payload    any
-	RawPayload []byte
-	CreatedAt  time.Time
-	RetryCount int
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Payload    json.RawMessage `json:"payload"`
+	RawPayload []byte          `json:"-"`
+	CreatedAt  time.Time       `json:"created_at"`
+	RetryCount int             `json:"retry_count"`
 }
 
 type OrderCreatedPayload struct {

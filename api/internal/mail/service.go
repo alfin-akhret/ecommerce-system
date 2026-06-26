@@ -39,10 +39,10 @@ func (s *Service) SubscribeTo(ctx context.Context, topic string) {
 
 		inboxEvent := events.InboxEvent{
 			ID:        event.ID,
-			EventType: topic,
+			EventType: event.Name,
 			Payload:   event.RawPayload,
-			Status:    events.InboxPending,
 			CreatedAt: event.CreatedAt,
+			Status:    events.InboxPending,
 		}
 
 		return s.inboxRepo.Save(ctx, inboxEvent)

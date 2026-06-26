@@ -108,7 +108,7 @@ func New(ctx context.Context) (*App, error) {
 
 	// order
 	// order service uses message-broker to broadcast message
-	orderService := order.NewService(db, productService, paymentService, cartService, broker)
+	orderService := order.NewService(db, productService, paymentService, cartService, broker, inboxRepo)
 	orderService.SubscribeTo(ctx, "payment.expired")
 	orderHandler := order.NewHandler(orderService)
 

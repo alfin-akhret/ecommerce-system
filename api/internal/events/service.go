@@ -2,8 +2,6 @@ package events
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -37,15 +35,10 @@ func (s *Service) GetUnpublishedEvents(ctx context.Context, limit int, lockedBy 
 	// convert outbox events to Events
 	var events []Event
 	for _, outEvnt := range outboxEvents {
-		payload, err := decodeOutboxPayload(outEvnt.EventType, outEvnt.Payload)
-		if err != nil {
-			return nil, err
-		}
-
 		event := Event{
 			ID:         outEvnt.ID,
 			Name:       outEvnt.EventType,
-			Payload:    payload,
+			Payload:    outEvnt.Payload,
 			CreatedAt:  outEvnt.CreatedAt,
 			RetryCount: outEvnt.RetryCount,
 		}
@@ -54,34 +47,6 @@ func (s *Service) GetUnpublishedEvents(ctx context.Context, limit int, lockedBy 
 	}
 
 	return events, nil
-}
-
-func decodeOutboxPayload(eventType string, rawPayload []byte) (any, error) {
-	switch eventType {
-	case "order.created":
-		var payload OrderCreatedPayload
-		if err := json.Unmarshal(rawPayload, &payload); err != nil {
-			return nil, err
-		}
-		return payload, nil
-
-	case "payment.callback.processed":
-		var payload PaymentCallbackProcessedPayload
-		if err := json.Unmarshal(rawPayload, &payload); err != nil {
-			return nil, err
-		}
-		return payload, nil
-
-	case "payment.expired":
-		var payload PaymentExpiredPayload
-		if err := json.Unmarshal(rawPayload, &payload); err != nil {
-			return nil, err
-		}
-		return payload, nil
-
-	default:
-		return nil, fmt.Errorf("unknown event type: %s", eventType)
-	}
 }
 
 func (s *Service) MarkPublished(ctx context.Context, publishedIds []string) error {

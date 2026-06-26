@@ -78,7 +78,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 	defer r.publishMu.Unlock()
 
 	// publish
-	body, err := json.Marshal(event.Payload)
+	body, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("Error parsing event payload: %v", err.Error())
 		return err, ""
@@ -189,7 +189,7 @@ func (r *RabbitMQBroker) Subscribe(
 
 			retryCount := getRetryCount(d.Headers)
 
-			event, err := decodeEvent(eventName, d.Body, d.MessageId, d.Timestamp)
+			event, err := decodeEvent(d.Body)
 			if err != nil {
 				log.Printf("failed decoding event, retrying events=%s retry=%d, err=%v",
 					event.Name, retryCount+1, err)

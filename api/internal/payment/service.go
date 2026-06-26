@@ -636,17 +636,11 @@ func (s *Service) processCallback(
 	}
 
 	// save payment.callback.processed event to outbox
-	event := events.Event{
-		ID:   uuid.NewString(),
-		Name: "payment.callback.processed",
-		Payload: events.PaymentCallbackProcessedPayload{
-			OrderID:   payment.OrderID.String(),
-			PaymentID: paymentID,
-			Status:    nextStatus,
-		},
-	}
-
-	payload, err := json.Marshal(event.Payload)
+	payload, err := json.Marshal(events.PaymentCallbackProcessedPayload{
+		OrderID:   payment.OrderID.String(),
+		PaymentID: paymentID,
+		Status:    nextStatus,
+	})
 	if err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
@@ -660,7 +654,13 @@ func (s *Service) processCallback(
 		)
 	}
 
-	if err := paymentRepo.SavePaymentEvent(ctx, "payment.callback.processed", payload); err != nil {
+	event := events.Event{
+		ID:      uuid.NewString(),
+		Name:    "payment.callback.processed",
+		Payload: payload,
+	}
+
+	if err := paymentRepo.SavePaymentEvent(ctx, "payment.callback.processed", event.Payload); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Payment: Failed to save payment.callback.processed event to outbox",
@@ -716,17 +716,12 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 
 	for _, p := range expiredPayments {
 		// save payment.expired event to outbox
-		event := events.Event{
-			ID:   uuid.NewString(),
-			Name: "payment.expired",
-			Payload: events.PaymentExpiredPayload{
-				OrderID:   p.OrderID.String(),
-				PaymentID: p.ID.String(),
-				Email:     "testingemail@gmail.com",
-			},
-		}
 
-		payload, err := json.Marshal(event.Payload)
+		payload, err := json.Marshal(events.PaymentExpiredPayload{
+			OrderID:   p.OrderID.String(),
+			PaymentID: p.ID.String(),
+			Email:     "testingemail@gmail.com",
+		})
 		if err != nil {
 			log.Error("Payment: Failed to save expire payment to outbox",
 				zap.String("payment_id", p.ID.String()),
@@ -734,7 +729,13 @@ func (s *Service) ExpirePayments(ctx context.Context) ([]ExpiredPayment, error) 
 			return nil, err
 		}
 
-		if err := paymentRepo.SavePaymentEvent(ctx, "payment.expired", payload); err != nil {
+		event := events.Event{
+			ID:      uuid.NewString(),
+			Name:    "payment.expired",
+			Payload: payload,
+		}
+
+		if err := paymentRepo.SavePaymentEvent(ctx, "payment.expired", event.Payload); err != nil {
 			log.Error("Payment: Failed to save payment.expired event to outbox",
 				zap.String("order_id", p.OrderID.String()),
 				zap.String("error_message", err.Error()),
