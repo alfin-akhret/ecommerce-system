@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
+	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
 )
 
 type InboxRepository struct {
@@ -32,6 +33,12 @@ func (ir *InboxRepository) Save(ctx context.Context, event InboxEvent) error {
 		event.Status,
 		event.CreatedAt,
 	)
+	if err != nil {
+		if helper.IsDuplicateKeyError(err) {
+			return ErrDuplicateInboxEvent
+		}
+		return err
+	}
 
-	return err
+	return nil
 }
