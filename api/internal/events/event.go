@@ -27,3 +27,28 @@ type PaymentExpiredPayload struct {
 	PaymentID string
 	Email     string
 }
+
+type OutboxEvent struct {
+	ID            string
+	EventType     string
+	Payload       []byte
+	Status        string
+	RetryCount    int
+	CreatedAt     time.Time
+	PublishedAt   *time.Time
+	NextAttemptAt time.Time
+	LockedAt      *time.Time
+	LockedBy      *string
+	LastError     *string
+}
+
+type InboxEvent struct {
+	ID          string
+	EventType   string
+	Payload     []byte
+	Status      string
+	RetryCount  int
+	CreatedAt   time.Time
+	ProcessedAt *time.Time
+	LastError   *string
+}
