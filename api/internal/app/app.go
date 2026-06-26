@@ -88,6 +88,9 @@ func New(ctx context.Context) (*App, error) {
 		3,
 	)
 
+	// event inbox repository
+	inboxRepo := events.NewInboxRepository(db)
+
 	// email service
 	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
 	mailConfig := &mail.EmailConfig{
@@ -95,7 +98,7 @@ func New(ctx context.Context) (*App, error) {
 		SMTPPort:      smtpPort,
 		DefaultSender: cfg.EmailDefaultSender,
 	}
-	emailService := mail.NewService(broker, mailConfig, db)
+	emailService := mail.NewService(broker, mailConfig, db, inboxRepo)
 	emailService.SubscribeTo(ctx, "order.created")
 	emailService.SubscribeTo(ctx, "payment.callback.processed")
 	emailService.SubscribeTo(ctx, "payment.expired")

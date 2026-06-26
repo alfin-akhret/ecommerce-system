@@ -97,7 +97,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 			ContentType:  "application/json",
 			Body:         body,
 			DeliveryMode: amqp.Persistent,
-			Timestamp:    time.Now(),
+			Timestamp:    event.CreatedAt, // biar createdAt event sinkron di semua part (producer, publisher, consumer)
 			MessageId:    event.ID,
 			Headers: amqp.Table{
 				"x-retry-count": retryCount,
@@ -189,7 +189,7 @@ func (r *RabbitMQBroker) Subscribe(
 
 			retryCount := getRetryCount(d.Headers)
 
-			event, err := decodeEvent(eventName, d.Body, d.MessageId)
+			event, err := decodeEvent(eventName, d.Body, d.MessageId, d.Timestamp)
 			if err != nil {
 				log.Printf("failed decoding event, retrying events=%s retry=%d, err=%v",
 					event.Name, retryCount+1, err)

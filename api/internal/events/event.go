@@ -6,6 +6,7 @@ type Event struct {
 	ID         string
 	Name       string
 	Payload    any
+	RawPayload []byte
 	CreatedAt  time.Time
 	RetryCount int
 }
@@ -52,3 +53,8 @@ type InboxEvent struct {
 	ProcessedAt *time.Time
 	LastError   *string
 }
+
+const (
+	InboxPending   = "PENDING"
+	InboxProcessed = "PROCESSED"
+)

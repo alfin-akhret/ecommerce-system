@@ -14,7 +14,7 @@ type InboxRepositoryManager interface {
 	Save(ctx context.Context, event InboxEvent) error
 }
 
-func CreateNewInboxRepository(db database.DBTX) *InboxRepository {
+func NewInboxRepository(db database.DBTX) *InboxRepository {
 	return &InboxRepository{db: db}
 }
 
