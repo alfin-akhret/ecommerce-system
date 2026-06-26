@@ -8,7 +8,7 @@ CREATE TABLE inbox_events (
     received_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     processed_at TIMESTAMPTZ NULL,
     last_error TEXT NULL
-)
+);
 
 CREATE INDEX idx_inbox_events_status_received_at
 ON inbox_events(status, received_at);
