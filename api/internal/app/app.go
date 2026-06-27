@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -88,6 +89,9 @@ func New(ctx context.Context) (*App, error) {
 		3,
 	)
 
+	// event inbox repository
+	inboxRepo := events.NewInboxRepository(db)
+
 	// email service
 	smtpPort, _ := strconv.Atoi(cfg.SMTPPort)
 	mailConfig := &mail.EmailConfig{
@@ -95,17 +99,27 @@ func New(ctx context.Context) (*App, error) {
 		SMTPPort:      smtpPort,
 		DefaultSender: cfg.EmailDefaultSender,
 	}
-	emailService := mail.NewService(broker, mailConfig, db)
+	emailService := mail.NewService(broker, mailConfig, db, inboxRepo)
 	emailService.SubscribeTo(ctx, "order.created")
 	emailService.SubscribeTo(ctx, "payment.callback.processed")
 	emailService.SubscribeTo(ctx, "payment.expired")
+
+	// email inbox processor worker (temporary solution just for testing)
+	go func() {
+		for {
+			if err := emailService.ProcessInbox(ctx); err != nil {
+				log.Println(err)
+			}
+			time.Sleep(time.Second)
+		}
+	}()
 
 	// payment
 	paymentService := payment.NewService(db, broker)
 
 	// order
 	// order service uses message-broker to broadcast message
-	orderService := order.NewService(db, productService, paymentService, cartService, broker)
+	orderService := order.NewService(db, productService, paymentService, cartService, broker, inboxRepo)
 	orderService.SubscribeTo(ctx, "payment.expired")
 	orderHandler := order.NewHandler(orderService)
 

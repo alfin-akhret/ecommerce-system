@@ -78,7 +78,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 	defer r.publishMu.Unlock()
 
 	// publish
-	body, err := json.Marshal(event.Payload)
+	body, err := json.Marshal(event)
 	if err != nil {
 		log.Printf("Error parsing event payload: %v", err.Error())
 		return err, ""
@@ -97,7 +97,7 @@ func (r *RabbitMQBroker) Publish(ctx context.Context, event events.Event, retryC
 			ContentType:  "application/json",
 			Body:         body,
 			DeliveryMode: amqp.Persistent,
-			Timestamp:    time.Now(),
+			Timestamp:    event.CreatedAt, // biar createdAt event sinkron di semua part (producer, publisher, consumer)
 			MessageId:    event.ID,
 			Headers: amqp.Table{
 				"x-retry-count": retryCount,
@@ -189,42 +189,56 @@ func (r *RabbitMQBroker) Subscribe(
 
 			retryCount := getRetryCount(d.Headers)
 
-			event, err := decodeEvent(eventName, d.Body, d.MessageId)
+			event, err := decodeEvent(d.Body)
 			if err != nil {
-				log.Printf("failed decoding event, retrying events=%s retry=%d, err=%v",
-					event.Name, retryCount+1, err)
+				log.Printf("failed decoding event, sending to DLQ: %v", err)
+				_ = d.Nack(false, false) // masuk DLQ
+				continue
+			}
+
+			err = handler(ctx, event)
+			if err == nil || errors.Is(err, events.ErrDuplicateInboxEvent) {
+				if errors.Is(err, events.ErrDuplicateInboxEvent) {
+					log.Printf("duplicate inbox event: %s", event.ID)
+				}
+
+				if err := d.Ack(false); err != nil {
+					log.Printf("failed to ack: %v", err)
+				}
+
+				continue
+			}
+
+			if retryCount >= maxRetry {
+				_ = d.Nack(false, false) // masuk DLQ
+				continue
+			}
+
+			delay := retryDelay(retryCount + 1)
+			log.Printf("handler failed, retrying events=%s retry=%d delay=%s err=%v",
+				event.Name, retryCount+1, delay, err)
+
+			select {
+			case <-time.After(delay):
+			case <-ctx.Done():
+				_ = d.Nack(false, false)
+				return // context sudah cancel, consumer sebaiknya berhenti semua
+			}
+
+			err, confirm := r.Publish(ctx, event, retryCount+1)
+			if err != nil {
 				_ = d.Nack(false, false)
 				continue
 			}
 
-			if err := handler(ctx, event); err != nil {
-				if retryCount >= maxRetry {
-					_ = d.Nack(false, false)
-					continue
-				}
-
-				delay := retryDelay(retryCount + 1)
-				log.Printf("handler failed, retrying events=%s retry=%d delay=%s err=%v",
-					event.Name, retryCount+1, delay, err)
-
-				select {
-				case <-time.After(delay):
-				case <-ctx.Done():
-					_ = d.Nack(false, false)
-					return // context sudah cancel, consumer sebaiknya berhenti semua
-				}
-
-				if err, _ := r.Publish(ctx, event, retryCount+1); err != nil {
-					_ = d.Nack(false, false)
-					continue
-				}
-
-				_ = d.Ack(false)
+			if confirm != "ACK" {
+				_ = d.Nack(false, false)
 				continue
 			}
 
 			_ = d.Ack(false)
 		}
+
 	}()
 }
 

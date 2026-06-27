@@ -2,18 +2,31 @@ package rabbitmqbroker
 
 import (
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
-func decodeEvent(eventName string, body []byte, messageID string) (events.Event, error) {
+func decodeEvent(body []byte) (events.Event, error) {
+
+	var event events.Event
+
+	err := json.Unmarshal(body, &event)
+	if err != nil {
+		return event, err
+	}
+
+	event.RawPayload = body
+
+	return event, nil
+
+	/**
 	event := events.Event{
-		ID:        messageID,
-		Name:      eventName,
-		CreatedAt: time.Now(),
+		ID:         messageID,
+		Name:       eventName,
+		CreatedAt:  createdAt,
+		RawPayload: body,
 	}
 
 	switch eventName {
@@ -43,6 +56,7 @@ func decodeEvent(eventName string, body []byte, messageID string) (events.Event,
 	}
 
 	return event, nil
+	*/
 
 }
 

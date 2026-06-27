@@ -30,23 +30,27 @@ type Service struct {
 	payment contracts.PaymentManager
 	cart    contracts.CartManager
 	broker  events.Broker
+
+	inboxRepo events.InboxRepositoryManager
 }
 
 func NewService(db *pgxpool.Pool,
 	product contracts.ProductManager,
 	payment contracts.PaymentManager,
 	cart contracts.CartManager,
-	broker events.Broker) *Service {
+	broker events.Broker,
+	inboxRepo events.InboxRepositoryManager) *Service {
 
 	repo := NewOrderRepository(db)
 
 	return &Service{
-		db:      db,
-		repo:    repo,
-		product: product,
-		payment: payment,
-		cart:    cart,
-		broker:  broker,
+		db:        db,
+		repo:      repo,
+		product:   product,
+		payment:   payment,
+		cart:      cart,
+		broker:    broker,
+		inboxRepo: inboxRepo,
 	}
 }
 
@@ -205,11 +209,20 @@ func (s *Service) ReleaseOrderStockWithTx(ctx context.Context, tx pgx.Tx, orderI
 // subscribe to topic: "payment.expired"
 func (s *Service) SubscribeTo(ctx context.Context, topic string) {
 	s.broker.Subscribe(ctx, topic, "order-service", func(ctx context.Context, event events.Event) error {
-		payload := event.Payload.(events.PaymentExpiredPayload)
-		if err := s.CancelOrder(ctx, payload.OrderID); err != nil {
-			return err
+		// todo: cancel order should be handle by separated worker
+		// if err := s.CancelOrder(ctx, payload.OrderID); err != nil {
+		// 	return err
+		// }
+
+		inboxEvent := events.InboxEvent{
+			ID:        event.ID,
+			EventType: event.Name,
+			Payload:   event.RawPayload,
+			CreatedAt: event.CreatedAt,
+			Status:    events.InboxPending,
 		}
-		return nil
+
+		return s.inboxRepo.Save(ctx, inboxEvent)
 	})
 }
 
@@ -507,16 +520,10 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 	}
 
 	// save event order.created
-	event := events.Event{
-		ID:   uuid.NewString(),
-		Name: "order.created",
-		Payload: events.OrderCreatedPayload{
-			OrderID: orderID.String(),
-			Email:   "testingemail@gmail.com",
-		},
-	}
-
-	payload, err := json.Marshal(event.Payload)
+	payload, err := json.Marshal(events.OrderCreatedPayload{
+		OrderID: orderID.String(),
+		Email:   "testingemail@gmail.com",
+	})
 	if err != nil {
 		// todo: need to be logged
 		span.RecordError(err)
@@ -529,7 +536,13 @@ func (s *Service) CreateOrder(ctx context.Context, userID string,
 		return nil, err
 	}
 
-	if err := repo.SaveOrderEvent(ctx, "order.created", payload); err != nil {
+	event := events.Event{
+		ID:      uuid.NewString(),
+		Name:    "order.created",
+		Payload: payload,
+	}
+
+	if err := repo.SaveOrderEvent(ctx, "order.created", event.Payload); err != nil {
 		span.RecordError(err)
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Order: Failed to save order.created event to outbox",

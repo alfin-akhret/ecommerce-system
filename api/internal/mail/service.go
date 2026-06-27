@@ -2,7 +2,6 @@ package mail
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -15,89 +14,38 @@ import (
 )
 
 type Service struct {
-	broker events.Broker
-	cfg    *EmailConfig
-	repo   *Repository
+	broker    events.Broker
+	cfg       *EmailConfig
+	repo      *Repository
+	inboxRepo events.InboxRepositoryManager
 }
 
-func NewService(broker events.Broker, cfg *EmailConfig, db *pgxpool.Pool) *Service {
+func NewService(broker events.Broker,
+	cfg *EmailConfig,
+	db *pgxpool.Pool,
+	inboxRepo events.InboxRepositoryManager) *Service {
+
 	repo := NewEmailRepository(db)
 	return &Service{
-		broker: broker,
-		cfg:    cfg,
-		repo:   repo,
+		broker:    broker,
+		cfg:       cfg,
+		repo:      repo,
+		inboxRepo: inboxRepo,
 	}
 }
 
 func (s *Service) SubscribeTo(ctx context.Context, topic string) {
 	s.broker.Subscribe(ctx, topic, "mail-service", func(ctx context.Context, event events.Event) error {
-		log := helper.LoggerFromCtx(ctx)
 
-		payload := EmailPayload{
-			From: s.cfg.DefaultSender,
-			To:   "user@anywhere.com",
+		inboxEvent := events.InboxEvent{
+			ID:        event.ID,
+			EventType: event.Name,
+			Payload:   event.RawPayload,
+			CreatedAt: event.CreatedAt,
+			Status:    events.InboxPending,
 		}
 
-		switch {
-		case topic == "order.created":
-			p := event.Payload.(events.OrderCreatedPayload)
-			payload.Subject = "Order Created"
-			payload.Body = fmt.Sprintf("Your order with ID:%s has been created", p.OrderID)
-		case topic == "payment.callback.processed":
-			p := event.Payload.(events.PaymentCallbackProcessedPayload)
-			payload.Subject = "Payment Status"
-			payload.Body = fmt.Sprintf("Your payment status with ID: %s for Order: %s was %s",
-				p.PaymentID, p.OrderID, p.Status)
-		case topic == "payment.expired":
-			p := event.Payload.(events.PaymentExpiredPayload)
-			payload.Subject = "Payment Expired"
-			payload.Body = fmt.Sprintf(
-				`Your order information:
-
-Order ID: %s
-Payment ID: %s
-Order Status: CANCELED
-Payment Status: %s
-`,
-				p.OrderID,
-				p.PaymentID,
-				"EXPIRED",
-			)
-		}
-
-		// idempotency:
-		// 1. kalau message sudah pernah sukses diproses, skip dan ack
-		if s.repo.IsProcessed(ctx, event.ID) {
-			return nil
-		}
-
-		// 2. kirim email dulu
-		log.Info("Sending email...", zap.String("body", payload.Body))
-
-		err := s.sendMail(ctx, payload)
-		if err != nil {
-			log.Error("Something wrong", zap.String("error", err.Error()))
-			return err
-		}
-
-		// 3. Baru tandai processed setelah email sukses
-		err = s.repo.InsertProcessedMessage(ctx, event.ID)
-		if err != nil {
-			if IsDuplicateKeyError(err) {
-				log.Error("Duplicate event: Event has been processed before", zap.String("error", err.Error()))
-				return nil
-			}
-			return err
-		}
-
-		// kelemahan cara diatas adalah
-		// jika email sukses dikirim, lalu service crash sebelum InserProcessedMessage,
-		// maka event bisa retry dan akibatnya email akan terkirim dua kali
-		// ini hal biasa di sistem event driven disebut dg istilah
-		// "at least once + idempotent consumer"
-		// tapi ini masih ada solusinya. -> inbox pattern
-
-		return nil
+		return s.inboxRepo.Save(ctx, inboxEvent)
 	})
 }
 
@@ -114,7 +62,7 @@ func (s *Service) sendMail(ctx context.Context, payload EmailPayload) error {
 
 	m := mailClient.NewMessage()
 
-	m.SetHeader("From", payload.From)
+	m.SetHeader("From", s.cfg.DefaultSender)
 	m.SetHeader("To", payload.To)
 	m.SetHeader("Subject", payload.Subject)
 	m.SetBody("text/plain", payload.Body)

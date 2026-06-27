@@ -22,20 +22,6 @@ type Repository struct {
 	db database.DBTX // can be either *pgxpool.Pool or pgx.Tx
 }
 
-type OutboxEvent struct {
-	ID            string
-	EventType     string
-	Payload       []byte
-	Status        string
-	RetryCount    int
-	CreatedAt     time.Time
-	PublishedAt   *time.Time
-	NextAttemptAt time.Time
-	LockedAt      *time.Time
-	LockedBy      *string
-	LastError     *string
-}
-
 func NewRepository(db database.DBTX) *Repository {
 	return &Repository{db: db}
 }

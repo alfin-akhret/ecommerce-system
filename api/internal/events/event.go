@@ -1,13 +1,17 @@
 package events
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Event struct {
-	ID         string
-	Name       string
-	Payload    any
-	CreatedAt  time.Time
-	RetryCount int
+	ID         string          `json:"id"`
+	Name       string          `json:"name"`
+	Payload    json.RawMessage `json:"payload"`
+	RawPayload []byte          `json:"-"`
+	CreatedAt  time.Time       `json:"created_at"`
+	RetryCount int             `json:"retry_count"`
 }
 
 type OrderCreatedPayload struct {
@@ -27,3 +31,39 @@ type PaymentExpiredPayload struct {
 	PaymentID string
 	Email     string
 }
+
+type OutboxEvent struct {
+	ID            string
+	EventType     string
+	Payload       []byte
+	Status        string
+	RetryCount    int
+	CreatedAt     time.Time
+	PublishedAt   *time.Time
+	NextAttemptAt time.Time
+	LockedAt      *time.Time
+	LockedBy      *string
+	LastError     *string
+}
+
+type InboxEvent struct {
+	ID          string
+	EventType   string
+	Payload     []byte
+	Status      string
+	RetryCount  int
+	CreatedAt   time.Time
+	ProcessedAt *time.Time
+	LastError   *string
+}
+
+const (
+	InboxPending   = "PENDING"
+	InboxProcessed = "PROCESSED"
+)
+
+var (
+	OrderCreated             = "order.created"
+	PaymentExpired           = "payment.expired"
+	PaymentCallbackProcessed = "payment.callback.processed"
+)
