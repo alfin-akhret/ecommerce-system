@@ -637,6 +637,7 @@ func (s *Service) processCallback(
 
 	// save payment.callback.processed event to outbox
 	payload, err := json.Marshal(events.PaymentCallbackProcessedPayload{
+		Email:     "testingemail@gmail.com",
 		OrderID:   payment.OrderID.String(),
 		PaymentID: paymentID,
 		Status:    nextStatus,
