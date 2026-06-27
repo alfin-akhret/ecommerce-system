@@ -61,3 +61,9 @@ const (
 	InboxPending   = "PENDING"
 	InboxProcessed = "PROCESSED"
 )
+
+var (
+	OrderCreated             = "order.created"
+	PaymentExpired           = "payment.expired"
+	PaymentCallbackProcessed = "payment.callback.processed"
+)

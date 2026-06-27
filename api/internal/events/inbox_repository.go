@@ -37,7 +37,7 @@ func (ir *InboxRepository) MarkProcessed(ctx context.Context, id string) error {
 	}
 
 	if cmd.RowsAffected() == 0 {
-		return errors.New("Event not found.")
+		return errors.New("event not found")
 	}
 
 	return nil
@@ -63,7 +63,7 @@ func (ir *InboxRepository) GetPending(ctx context.Context, limit int) ([]InboxEv
 	}
 	defer rows.Close()
 
-	var inbox_events []InboxEvent
+	var inboxEvents []InboxEvent
 	for rows.Next() {
 		var inbox_event InboxEvent
 		if err := rows.Scan(
@@ -75,10 +75,13 @@ func (ir *InboxRepository) GetPending(ctx context.Context, limit int) ([]InboxEv
 		); err != nil {
 			return nil, err
 		}
-		inbox_events = append(inbox_events, inbox_event)
+		inboxEvents = append(inboxEvents, inbox_event)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
 	}
 
-	return inbox_events, nil
+	return inboxEvents, nil
 }
 
 func (ir *InboxRepository) Save(ctx context.Context, event InboxEvent) error {

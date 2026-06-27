@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"strconv"
 	"time"
@@ -102,6 +103,16 @@ func New(ctx context.Context) (*App, error) {
 	emailService.SubscribeTo(ctx, "order.created")
 	emailService.SubscribeTo(ctx, "payment.callback.processed")
 	emailService.SubscribeTo(ctx, "payment.expired")
+
+	// email inbox processor worker (temporary solution just for testing)
+	go func() {
+		for {
+			if err := emailService.ProcessInbox(ctx); err != nil {
+				log.Println(err)
+			}
+			time.Sleep(time.Second)
+		}
+	}()
 
 	// payment
 	paymentService := payment.NewService(db, broker)
