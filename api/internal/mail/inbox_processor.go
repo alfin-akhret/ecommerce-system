@@ -8,15 +8,20 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 )
 
+const inboxBatchSize = 10
+
 func (s *Service) ProcessInbox(ctx context.Context) error {
-	inboxEvents, err := s.inboxRepo.GetPending(ctx, 10)
+	inboxEvents, err := s.inboxRepo.Claim(ctx, inboxBatchSize)
 	if err != nil {
 		return err
 	}
 
 	for _, inboxEvent := range inboxEvents {
 		if err := s.handleInboxEvent(ctx, inboxEvent); err != nil {
-			return err
+			if markErr := s.inboxRepo.MarkPending(ctx, inboxEvent.ID, err); markErr != nil {
+				return markErr
+			}
+			continue
 		}
 
 		if err := s.inboxRepo.MarkProcessed(ctx, inboxEvent.ID); err != nil {
@@ -55,8 +60,6 @@ func (s *Service) handleOrderCreated(ctx context.Context, event events.Event) er
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-
-	fmt.Printf("%+v\n", payload)
 
 	emailPayload := EmailPayload{
 		To:      payload.Email,

@@ -9,16 +9,18 @@ import (
 )
 
 type InboxRepository struct {
-	db DB // pake DB interface biar bisa micro transaksi di dalam repo seprti pd function Claim
+	db database.DB // pake DB interface biar bisa micro transaksi di dalam repo seprti pd function Claim
 }
 
 type InboxRepositoryManager interface {
 	Save(ctx context.Context, event InboxEvent) error
 	GetPending(ctx context.Context, limit int) ([]InboxEvent, error)
 	MarkProcessed(ctx context.Context, id string) error
+	Claim(ctx context.Context, limit int) ([]InboxEvent, error)
+	MarkPending(ctx context.Context, id string, err error) error
 }
 
-func NewInboxRepository(db database.DBTX) *InboxRepository {
+func NewInboxRepository(db database.DB) *InboxRepository {
 	return &InboxRepository{db: db}
 }
 
@@ -33,8 +35,8 @@ func NewInboxRepository(db database.DBTX) *InboxRepository {
 // statusnya sudah berubah jadi PROCESSING.
 // kenapa kita butuh transaksi internal seperti ini?
 // karena transaksi semacam ini adalah bagian dari proses implementasi query, bukan bagian
-// dari business logic. dengan kata lain transaksi disini bukan untuk tujuan atomic tapi untuk
-// tujuan locking cepat agar tidak ada race condition antar worker.
+// dari business logic. transaksi disini digunakan untuk menjamin proses claim (select + update)
+// berlangsung atomik sekaligus memperoleh row lock secara singkat.
 func (ir *InboxRepository) Claim(ctx context.Context, limit int) ([]InboxEvent, error) {
 
 	query := `
@@ -53,7 +55,8 @@ func (ir *InboxRepository) Claim(ctx context.Context, limit int) ([]InboxEvent, 
 	RETURNING
 		inbox_events.id,
 		inbox_events.event_type,
-		inbox_events.playload,
+		inbox_events.payload,
+		inbox_events.status,
 		inbox_events.retry_count,
 		inbox_events.created_at;
 	`
@@ -62,9 +65,11 @@ func (ir *InboxRepository) Claim(ctx context.Context, limit int) ([]InboxEvent, 
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
-	rows, err := tx.Query(ctx, query, StatusPending, limit, StatusProcessing)
+	rows, err := tx.Query(ctx, query, InboxPending, limit, InboxProcessing)
 	if err != nil {
 		return nil, err
 	}
@@ -72,35 +77,62 @@ func (ir *InboxRepository) Claim(ctx context.Context, limit int) ([]InboxEvent, 
 
 	var inboxEvents []InboxEvent
 	for rows.Next() {
-		var inbox_event InboxEvent
+		var event InboxEvent
 		if err := rows.Scan(
-			&inbox_event.ID,
-			&inbox_event.EventType,
-			&inbox_event.Payload,
-			&inbox_event.CreatedAt,
-			&inbox_event.RetryCount,
+			&event.ID,
+			&event.EventType,
+			&event.Payload,
+			&event.Status,
+			&event.RetryCount,
+			&event.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
-		inboxEvents = append(inboxEvents, inbox_event)
+		inboxEvents = append(inboxEvents, event)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	if err := tx.Commit(ctx); err != nil {
 		return nil, err
 	}
 
 	return inboxEvents, nil
 }
 
+func (ir *InboxRepository) MarkPending(ctx context.Context, id string, err error) error {
+
+	query := `
+	UPDATE inbox_events
+	SET 
+		status = $1,
+		last_error = $2,
+		retry_count = retry_count + 1
+	WHERE id = $3
+	`
+	cmd, err := ir.db.Exec(ctx, query, InboxPending, err.Error(), id)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return errors.New("event not found")
+	}
+
+	return nil
+}
+
 func (ir *InboxRepository) MarkProcessed(ctx context.Context, id string) error {
 	query := `
 	UPDATE inbox_events
 	SET 
-		status = 'PROCESSED',
+		status = $1,
 		processed_at = NOW()
-	WHERE id = $1;
+	WHERE id = $2;
 	`
 
-	cmd, err := ir.db.Exec(ctx, query, id)
+	cmd, err := ir.db.Exec(ctx, query, InboxProcessed, id)
 	if err != nil {
 		return err
 	}
@@ -134,17 +166,17 @@ func (ir *InboxRepository) GetPending(ctx context.Context, limit int) ([]InboxEv
 
 	var inboxEvents []InboxEvent
 	for rows.Next() {
-		var inbox_event InboxEvent
+		var event InboxEvent
 		if err := rows.Scan(
-			&inbox_event.ID,
-			&inbox_event.EventType,
-			&inbox_event.Payload,
-			&inbox_event.CreatedAt,
-			&inbox_event.RetryCount,
+			&event.ID,
+			&event.EventType,
+			&event.Payload,
+			&event.CreatedAt,
+			&event.RetryCount,
 		); err != nil {
 			return nil, err
 		}
-		inboxEvents = append(inboxEvents, inbox_event)
+		inboxEvents = append(inboxEvents, event)
 	}
 	if err := rows.Err(); err != nil {
 		return nil, err
