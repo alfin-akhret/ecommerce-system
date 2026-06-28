@@ -58,8 +58,10 @@ type InboxEvent struct {
 }
 
 const (
-	InboxPending   = "PENDING"
-	InboxProcessed = "PROCESSED"
+	InboxPending    = "PENDING"
+	InboxProcessing = "PROCESSING"
+	InboxProcessed  = "PROCESSED"
+	InboxFailed     = "FAILED"
 )
 
 var (
