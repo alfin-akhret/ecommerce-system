@@ -55,6 +55,7 @@ type InboxEvent struct {
 	CreatedAt   time.Time
 	ProcessedAt *time.Time
 	LastError   *string
+	Consumer    string
 }
 
 const (

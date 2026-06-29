@@ -14,7 +14,7 @@ const (
 )
 
 func (s *Service) ProcessInbox(ctx context.Context) error {
-	inboxEvents, err := s.inboxRepo.Claim(ctx, inboxBatchSize)
+	inboxEvents, err := s.inboxRepo.Claim(ctx, inboxBatchSize, consumerName)
 	if err != nil {
 		return err
 	}
@@ -22,20 +22,24 @@ func (s *Service) ProcessInbox(ctx context.Context) error {
 	for _, inboxEvent := range inboxEvents {
 
 		if inboxEvent.RetryCount >= maxRetryCount {
-			if markFailedErr := s.inboxRepo.MarkFailed(ctx, inboxEvent.ID); markFailedErr != nil {
+			if markFailedErr := s.inboxRepo.MarkFailed(ctx, inboxEvent.ID,
+				inboxEvent.Consumer); markFailedErr != nil {
 				return markFailedErr
 			}
 			continue
 		}
 
 		if err := s.handleInboxEvent(ctx, inboxEvent); err != nil {
-			if markErr := s.inboxRepo.MarkPending(ctx, inboxEvent.ID, inboxEvent.RetryCount, err); markErr != nil {
+			if markErr := s.inboxRepo.MarkPending(ctx, inboxEvent.ID,
+				inboxEvent.RetryCount,
+				err,
+				inboxEvent.Consumer); markErr != nil {
 				return markErr
 			}
 			continue
 		}
 
-		if err := s.inboxRepo.MarkProcessed(ctx, inboxEvent.ID); err != nil {
+		if err := s.inboxRepo.MarkProcessed(ctx, inboxEvent.ID, inboxEvent.Consumer); err != nil {
 			return err
 		}
 	}

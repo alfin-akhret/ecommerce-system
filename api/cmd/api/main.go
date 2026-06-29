@@ -101,8 +101,8 @@ func main() {
 			r.With(auth.AuthMiddleware).Get("/{payment_id}", helper.Handle(application.PaymentHandler.GetPayment))
 			r.With(auth.AuthMiddleware).Patch("/{payment_id}", helper.Handle(application.PaymentHandler.UpdatePaymentStatus))
 			r.Post("/callback", helper.Handle(application.PaymentHandler.HandleCallback))
-			r.Post("/{payment_id}/success", helper.Handle(application.PaymentHandler.ProcessPaymentSuccess))
-			r.Post("/{payment_id}/fail", helper.Handle(application.PaymentHandler.ProcessPaymentFailed))
+			// r.Post("/{payment_id}/success", helper.Handle(application.PaymentHandler.ProcessPaymentSuccess))
+			// r.Post("/{payment_id}/fail", helper.Handle(application.PaymentHandler.ProcessPaymentFailed))
 		})
 
 		r.Route("/products", func(r chi.Router) {

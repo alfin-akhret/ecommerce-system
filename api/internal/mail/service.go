@@ -13,6 +13,8 @@ import (
 	"go.uber.org/zap"
 )
 
+const consumerName = "mail-service"
+
 type Service struct {
 	broker    events.Broker
 	cfg       *EmailConfig
@@ -43,6 +45,7 @@ func (s *Service) SubscribeTo(ctx context.Context, topic string) {
 			Payload:   event.RawPayload,
 			CreatedAt: event.CreatedAt,
 			Status:    events.InboxPending,
+			Consumer:  consumerName,
 		}
 
 		return s.inboxRepo.Save(ctx, inboxEvent)
