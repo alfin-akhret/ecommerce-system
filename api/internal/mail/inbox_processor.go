@@ -8,18 +8,38 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 )
 
+const (
+	inboxBatchSize = 10
+	maxRetryCount  = 5
+)
+
 func (s *Service) ProcessInbox(ctx context.Context) error {
-	inboxEvents, err := s.inboxRepo.GetPending(ctx, 10)
+	inboxEvents, err := s.inboxRepo.Claim(ctx, inboxBatchSize, consumerName)
 	if err != nil {
 		return err
 	}
 
 	for _, inboxEvent := range inboxEvents {
-		if err := s.handleInboxEvent(ctx, inboxEvent); err != nil {
-			return err
+
+		if inboxEvent.RetryCount >= maxRetryCount {
+			if markFailedErr := s.inboxRepo.MarkFailed(ctx, inboxEvent.ID,
+				inboxEvent.Consumer); markFailedErr != nil {
+				return markFailedErr
+			}
+			continue
 		}
 
-		if err := s.inboxRepo.MarkProcessed(ctx, inboxEvent.ID); err != nil {
+		if err := s.handleInboxEvent(ctx, inboxEvent); err != nil {
+			if markErr := s.inboxRepo.MarkPending(ctx, inboxEvent.ID,
+				inboxEvent.RetryCount,
+				err,
+				inboxEvent.Consumer); markErr != nil {
+				return markErr
+			}
+			continue
+		}
+
+		if err := s.inboxRepo.MarkProcessed(ctx, inboxEvent.ID, inboxEvent.Consumer); err != nil {
 			return err
 		}
 	}
@@ -55,8 +75,6 @@ func (s *Service) handleOrderCreated(ctx context.Context, event events.Event) er
 	if err := json.Unmarshal(event.Payload, &payload); err != nil {
 		return err
 	}
-
-	fmt.Printf("%+v\n", payload)
 
 	emailPayload := EmailPayload{
 		To:      payload.Email,

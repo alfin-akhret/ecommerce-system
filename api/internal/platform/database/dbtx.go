@@ -12,3 +12,8 @@ type DBTX interface {
 	Query(ctx context.Context, sql string, args ...any) (pgx.Rows, error)
 	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
 }
+
+type DB interface {
+	DBTX
+	Begin(ctx context.Context) (pgx.Tx, error) // untuk repo yg butuh transaksi internal. contoh: inbox repo
+}

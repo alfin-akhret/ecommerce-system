@@ -220,6 +220,7 @@ func (s *Service) SubscribeTo(ctx context.Context, topic string) {
 			Payload:   event.RawPayload,
 			CreatedAt: event.CreatedAt,
 			Status:    events.InboxPending,
+			Consumer:  "order-service",
 		}
 
 		return s.inboxRepo.Save(ctx, inboxEvent)

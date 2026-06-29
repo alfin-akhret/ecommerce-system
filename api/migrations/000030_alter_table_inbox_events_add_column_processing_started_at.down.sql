@@ -1,0 +1,2 @@
+ALTER TABLE inbox_events
+DROP COLUMN processing_started_at;

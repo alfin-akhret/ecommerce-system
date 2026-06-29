@@ -55,11 +55,14 @@ type InboxEvent struct {
 	CreatedAt   time.Time
 	ProcessedAt *time.Time
 	LastError   *string
+	Consumer    string
 }
 
 const (
-	InboxPending   = "PENDING"
-	InboxProcessed = "PROCESSED"
+	InboxPending    = "PENDING"
+	InboxProcessing = "PROCESSING"
+	InboxProcessed  = "PROCESSED"
+	InboxFailed     = "FAILED"
 )
 
 var (
