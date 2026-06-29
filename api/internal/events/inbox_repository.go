@@ -3,6 +3,7 @@ package events
 import (
 	"context"
 	"errors"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/platform/database"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -17,7 +18,8 @@ type InboxRepositoryManager interface {
 	GetPending(ctx context.Context, limit int) ([]InboxEvent, error)
 	MarkProcessed(ctx context.Context, id string) error
 	Claim(ctx context.Context, limit int) ([]InboxEvent, error)
-	MarkPending(ctx context.Context, id string, err error) error
+	MarkPending(ctx context.Context, id string, retryCount int, err error) error
+	MarkFailed(ctx context.Context, id string) error
 }
 
 func NewInboxRepository(db database.DB) *InboxRepository {
@@ -44,6 +46,7 @@ func (ir *InboxRepository) Claim(ctx context.Context, limit int) ([]InboxEvent, 
 		SELECT id
 		FROM inbox_events
 		WHERE status = $1
+		AND next_attempt_at <= NOW()
 		ORDER BY received_at
 		LIMIT $2
 		FOR UPDATE SKIP LOCKED
@@ -101,17 +104,20 @@ func (ir *InboxRepository) Claim(ctx context.Context, limit int) ([]InboxEvent, 
 	return inboxEvents, nil
 }
 
-func (ir *InboxRepository) MarkPending(ctx context.Context, id string, err error) error {
+func (ir *InboxRepository) MarkPending(ctx context.Context, id string, retryCount int, err error) error {
+
+	nextAttempt := time.Now().UTC().Add(helper.CalculateBackoff(retryCount + 1))
 
 	query := `
 	UPDATE inbox_events
 	SET 
 		status = $1,
-		last_error = $2,
-		retry_count = retry_count + 1
-	WHERE id = $3
+		retry_count = retry_count + 1,
+		next_attempt_at = $2,
+		last_error = $3
+	WHERE id = $4
 	`
-	cmd, err := ir.db.Exec(ctx, query, InboxPending, err.Error(), id)
+	cmd, err := ir.db.Exec(ctx, query, InboxPending, nextAttempt, err.Error(), id)
 	if err != nil {
 		return err
 	}
@@ -142,6 +148,27 @@ func (ir *InboxRepository) MarkProcessed(ctx context.Context, id string) error {
 	}
 
 	return nil
+}
+
+func (ir *InboxRepository) MarkFailed(ctx context.Context, id string) error {
+	query := `
+	UPDATE inbox_events
+	SET 
+		status = $1
+	WHERE id = $2;
+	`
+
+	cmd, err := ir.db.Exec(ctx, query, InboxFailed, id)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return errors.New("event not found")
+	}
+
+	return nil
+
 }
 
 func (ir *InboxRepository) GetPending(ctx context.Context, limit int) ([]InboxEvent, error) {

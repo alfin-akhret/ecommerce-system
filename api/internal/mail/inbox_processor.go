@@ -8,7 +8,10 @@ import (
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 )
 
-const inboxBatchSize = 10
+const (
+	inboxBatchSize = 10
+	maxRetryCount  = 5
+)
 
 func (s *Service) ProcessInbox(ctx context.Context) error {
 	inboxEvents, err := s.inboxRepo.Claim(ctx, inboxBatchSize)
@@ -17,8 +20,16 @@ func (s *Service) ProcessInbox(ctx context.Context) error {
 	}
 
 	for _, inboxEvent := range inboxEvents {
+
+		if inboxEvent.RetryCount >= maxRetryCount {
+			if markFailedErr := s.inboxRepo.MarkFailed(ctx, inboxEvent.ID); markFailedErr != nil {
+				return markFailedErr
+			}
+			continue
+		}
+
 		if err := s.handleInboxEvent(ctx, inboxEvent); err != nil {
-			if markErr := s.inboxRepo.MarkPending(ctx, inboxEvent.ID, err); markErr != nil {
+			if markErr := s.inboxRepo.MarkPending(ctx, inboxEvent.ID, inboxEvent.RetryCount, err); markErr != nil {
 				return markErr
 			}
 			continue
