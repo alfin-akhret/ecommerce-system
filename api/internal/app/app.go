@@ -114,6 +114,25 @@ func New(ctx context.Context) (*App, error) {
 		}
 	}()
 
+	// email inbox recovery worker
+	go func() {
+		ticker := time.NewTicker(time.Minute)
+		defer ticker.Stop()
+
+		for {
+			select {
+			case <-ctx.Done():
+				return
+
+			case <-ticker.C:
+				if err := emailService.RecoverInbox(ctx); err != nil {
+					log.Printf("ERROR recovery worker: %v\n", err.Error())
+				}
+			}
+		}
+
+	}()
+
 	// payment
 	paymentService := payment.NewService(db, broker)
 

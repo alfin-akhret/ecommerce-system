@@ -19,6 +19,7 @@ type InboxRepositoryManager interface {
 	Claim(ctx context.Context, limit int, consumer string) ([]InboxEvent, error)
 	MarkPending(ctx context.Context, id string, retryCount int, err error, consumer string) error
 	MarkFailed(ctx context.Context, id string, consumer string) error
+	RecoverProcessing(ctx context.Context, timeout time.Duration, consumer string) error
 }
 
 func NewInboxRepository(db database.DB) *InboxRepository {
@@ -52,7 +53,8 @@ func (ir *InboxRepository) Claim(ctx context.Context, limit int, consumer string
 		FOR UPDATE SKIP LOCKED
 	)
 	UPDATE inbox_events
-	SET status = $4
+	SET status = $4,
+	processing_started_at = NOW()
 	FROM claimed
 	WHERE inbox_events.id = claimed.id
 	AND inbox_events.consumer = $2
@@ -115,6 +117,7 @@ func (ir *InboxRepository) MarkPending(ctx context.Context, id string, retryCoun
 	UPDATE inbox_events
 	SET 
 		status = $1,
+		processing_started_at = NULL,
 		retry_count = retry_count + 1,
 		next_attempt_at = $2,
 		last_error = $3
@@ -139,7 +142,8 @@ func (ir *InboxRepository) MarkProcessed(ctx context.Context, id string, consume
 	SET 
 		status = $1,
 		processed_at = NOW(),
-		last_error = NULL
+		last_error = NULL,
+		processing_started_at = NULL
 	WHERE id = $2
 	AND consumer = $3
 	`
@@ -166,6 +170,37 @@ func (ir *InboxRepository) MarkFailed(ctx context.Context, id string, consumer s
 	`
 
 	cmd, err := ir.db.Exec(ctx, query, InboxFailed, id, consumer)
+	if err != nil {
+		return err
+	}
+
+	if cmd.RowsAffected() == 0 {
+		return errors.New("event not found")
+	}
+
+	return nil
+
+}
+
+func (ir *InboxRepository) RecoverProcessing(ctx context.Context, timeout time.Duration, consumer string) error {
+
+	query := `
+	UPDATE inbox_events
+	SET
+		status = $1,
+		processing_started_at = NULL,
+		next_attempt_at = NOW()
+	WHERE
+		status = $2
+	AND 
+		processing_started_at < $3
+	AND
+		consumer = $4
+	`
+
+	deadline := time.Now().UTC().Add(-timeout)
+
+	cmd, err := ir.db.Exec(ctx, query, InboxPending, InboxProcessing, deadline, consumer)
 	if err != nil {
 		return err
 	}
