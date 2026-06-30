@@ -19,6 +19,18 @@ func NewEmailRepository(db database.DBTX) *Repository {
 	}
 }
 
+func (r *Repository) InsertSentMail(ctx context.Context, mail SentEmail) error {
+
+	query := `
+	INSERT INTO sent_emails (event_id, recipient, subject, sent_at)
+	VALUES ($1, $2, $3, $4)
+	`
+
+	_, err := r.db.Exec(ctx, query, mail.EventID, mail.Recipient, mail.Subject, mail.SentAt)
+
+	return err
+}
+
 func (r *Repository) InsertProcessedMessage(ctx context.Context, eventID string) error {
 	query := `
 	INSERT INTO processed_messages (message_id, created_at)

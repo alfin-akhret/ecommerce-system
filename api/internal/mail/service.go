@@ -2,6 +2,7 @@ package mail
 
 import (
 	"context"
+	"time"
 
 	"github.com/alfin-akhret/ecommerce-system/internal/events"
 	"github.com/alfin-akhret/ecommerce-system/pkg/helper"
@@ -52,7 +53,7 @@ func (s *Service) SubscribeTo(ctx context.Context, topic string) {
 	})
 }
 
-func (s *Service) sendMail(ctx context.Context, payload EmailPayload) error {
+func (s *Service) sendMail(ctx context.Context, payload EmailPayload, eventID string) error {
 	log := helper.LoggerFromCtx(ctx)
 	tr := otel.Tracer("mail.service")
 	ctx, span := tr.Start(ctx, "mail.service.sendMail")
@@ -82,6 +83,18 @@ func (s *Service) sendMail(ctx context.Context, payload EmailPayload) error {
 		span.SetStatus(codes.Error, err.Error())
 		log.Error("Failed to send email", zap.String("error", err.Error()))
 		return err
+	}
+
+	// save email to sent_emails table
+	sentEmail := SentEmail{
+		EventID:   eventID,
+		Recipient: payload.To,
+		Subject:   payload.Subject,
+		SentAt:    time.Now().UTC(),
+	}
+
+	if err := s.repo.InsertSentMail(ctx, sentEmail); err != nil {
+		log.Error("Error to save sent mail to DB", zap.String("error", err.Error()))
 	}
 
 	log.Info("Email sent", zap.String("to", payload.To), zap.String("Subject", payload.Subject))

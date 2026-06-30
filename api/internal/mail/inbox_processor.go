@@ -42,6 +42,7 @@ func (s *Service) ProcessInbox(ctx context.Context) error {
 		if err := s.inboxRepo.MarkProcessed(ctx, inboxEvent.ID, inboxEvent.Consumer); err != nil {
 			return err
 		}
+
 	}
 
 	return nil
@@ -85,7 +86,7 @@ func (s *Service) handleOrderCreated(ctx context.Context, event events.Event) er
 		),
 	}
 
-	return s.sendMail(ctx, emailPayload)
+	return s.sendMail(ctx, emailPayload, event.ID)
 }
 
 func (s *Service) handlePaymentExpired(ctx context.Context, event events.Event) error {
@@ -113,7 +114,7 @@ func (s *Service) handlePaymentExpired(ctx context.Context, event events.Event) 
 		),
 	}
 
-	return s.sendMail(ctx, emailPayload)
+	return s.sendMail(ctx, emailPayload, event.ID)
 
 }
 
@@ -134,6 +135,6 @@ func (s *Service) handlePaymentCallbackProcessed(ctx context.Context, event even
 			payload.Status),
 	}
 
-	return s.sendMail(ctx, emailPayload)
+	return s.sendMail(ctx, emailPayload, event.ID)
 
 }
