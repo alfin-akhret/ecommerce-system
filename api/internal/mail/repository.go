@@ -31,6 +31,18 @@ func (r *Repository) InsertSentMail(ctx context.Context, mail SentEmail) error {
 	return err
 }
 
+func (r *Repository) IsAlreadySent(ctx context.Context, eventID string) bool {
+	query := `
+	SELECT event_id
+	FROM sent_emails
+	WHERE event_id = $1
+	`
+
+	var eid string
+	err := r.db.QueryRow(ctx, query, eventID).Scan(&eid)
+	return err == nil
+}
+
 func (r *Repository) InsertProcessedMessage(ctx context.Context, eventID string) error {
 	query := `
 	INSERT INTO processed_messages (message_id, created_at)

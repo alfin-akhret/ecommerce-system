@@ -64,6 +64,13 @@ func (s *Service) sendMail(ctx context.Context, payload EmailPayload, eventID st
 		attribute.String("Subject", payload.Subject),
 	)
 
+	// for idempotency: check if email already sent before
+	sent := s.repo.IsAlreadySent(ctx, eventID)
+	if sent {
+		log.Error("Email already sent, skipping", zap.String("event_id", eventID))
+		return nil
+	}
+
 	m := mailClient.NewMessage()
 
 	m.SetHeader("From", s.cfg.DefaultSender)
@@ -95,6 +102,7 @@ func (s *Service) sendMail(ctx context.Context, payload EmailPayload, eventID st
 
 	if err := s.repo.InsertSentMail(ctx, sentEmail); err != nil {
 		log.Error("Error to save sent mail to DB", zap.String("error", err.Error()))
+		return err
 	}
 
 	log.Info("Email sent", zap.String("to", payload.To), zap.String("Subject", payload.Subject))
