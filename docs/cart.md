@@ -6,7 +6,7 @@ Cart is an aggregate root represents user's shoping cart.
 - Store items `(CartItems)` the user wants to buy.
 - Keeping domain invariant (rules) such as `qty > 0`, valid price, must have an owner, etc.
 - every state mutation must be done through domain methods (`AddItem, RemoveItem, UpdateQuantity`).
-- Price only updated with newest price (from db) only when user ADD item to cart. Updating quantity doesn't update the price, therefore the prices in the cart do not reflect changes in the database. The prices in the cart are only a snapshot to give the user an estimate of the total amount they will pay. perubahan testing git2. The actual price is determined at the time of order creation.
+- Price only updated with newest price (from db) only when user ADD item to cart. Updating quantity doesn't update the price, therefore the prices in the cart do not reflect changes in the database. The prices in the cart are only a snapshot to give the user an estimate of the total amount they will pay. some changes from branch_1. perubahan testing git2. The actual price is determined at the time of order creation.
   
 testing2......
 
